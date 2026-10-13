@@ -17,6 +17,9 @@ const ZONE_STYLE: Record<ZoneId, { color: number; tile: string }> = {
   town: { color: 0x8c8c7c, tile: 'tile_town' },
 }
 
+// How far past the map edge the surrounding ground is drawn (covers the largest menu sheet at min zoom).
+const OUTSIDE_MARGIN = 1024
+
 export interface GuideTarget { at: Point; label: string; hideWithin: number }
 
 export interface SceneHooks {
@@ -117,6 +120,15 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private drawGround() {
+    // Wild mountain ground around the map, so camera moves past the edge (menu sheet, HUD offset)
+    // never reveal the background colour.
+    const { width, height } = this.hooks.game.map
+    const m = OUTSIDE_MARGIN
+    if (this.textures.exists('tile_deep')) {
+      this.add.tileSprite(-m, -m, width + m * 2, height + m * 2, 'tile_deep').setOrigin(0, 0).setTileScale(0.5).setDepth(-11).setTint(0xb0b0a0)
+    } else {
+      this.add.rectangle(-m, -m, width + m * 2, height + m * 2, 0x2c3a24).setOrigin(0, 0).setDepth(-11)
+    }
     for (const z of this.hooks.game.map.zones) {
       const { color, tile } = ZONE_STYLE[z.id]
       if (this.textures.exists(tile)) {
