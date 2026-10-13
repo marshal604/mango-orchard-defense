@@ -2,6 +2,12 @@
 
 Orchard-vs-macaques top-down gather / sell / upgrade / boss game (芒果園保衛戰). See `CLAUDE.md`.
 
+![芒果園保衛戰 遊玩畫面](docs/media/gameplay.gif)
+
+完整畫質影片：[docs/media/gameplay.mp4](docs/media/gameplay.mp4)
+
+採芒果、趕台灣獼猴、在路邊水果攤賣給排隊客人，買升級、請工人，最後到深山打倒猴王。通關時間就是分數。
+
 ```
 npm install
 npm run dev
