@@ -1,11 +1,12 @@
 import type { BuildingId, Difficulty, Resource, Track } from './config'
-import { BUILDING, COMBAT, GOOSE, KING, NEST, PLAYER, TREE } from './config'
+import { BUILDING, COMBAT, ECONOMY, GOOSE, KING, MILESTONES, NEST, PLAYER, TREE } from './config'
 import type { Attacker, Goose, GooseSize, Nest, Pile, Target, Tree, Worker } from './entities'
 import { aggro, gooseStats, updateGoose, type GooseWorld } from './geese'
 import type { GameMap, Point, ZoneId } from './map'
 import { DEFAULT_MAP, dist, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
 import { makeRng } from './rng'
-import { attackRange, playerSpeed, racketOf, RunState, sellInterval } from './run'
+import { attackRange, playerSpeed, racketOf, RunState, sellInterval, sellPrice } from './run'
+import { knockDown, makeWorker, updateWorker, workerBagFree, type WorkerWorld } from './workers'
 import { makeGoose, makeTree, newId, populate } from './world'
 
 export interface Input { move: Point }
@@ -20,6 +21,8 @@ export type GameEvent =
   | { type: 'sale'; kind: Resource }
   | { type: 'bought'; track: Track; level: number }
   | { type: 'buyFail'; track: Track }
+  | { type: 'notice'; title: string; lines: string[]; tone: 'info' | 'warn' }
+  | { type: 'delivery'; amount: number }
 
 export interface GameOptions {
   difficulty: Difficulty
@@ -43,7 +46,7 @@ export interface PlayerStatus {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
-export class Game implements GooseWorld {
+export class Game implements GooseWorld, WorkerWorld {
   readonly difficulty: Difficulty
   readonly map: GameMap
   readonly run: RunState
@@ -61,6 +64,7 @@ export class Game implements GooseWorld {
   elapsed = 0
   zone: ZoneId
   private sellCd = 0
+  private deliveryCd = 0
   private noRacket = false
   private needRacketAt = -Infinity
   private events: GameEvent[] = []
@@ -89,7 +93,7 @@ export class Game implements GooseWorld {
   bite = (g: Goose, a: Attacker) => {
     const cfg = this.run.cfg
     const dmg = g.size === 'king' ? cfg.king.bite : (g.size === 'big' ? cfg.bigGooseBite : cfg.gooseBite) * g.zone.damageMult
-    if (a !== 'player') return
+    if (a !== 'player') return this.hurtWorker(a, dmg)
     if (!this.hurtPlayer(dmg)) return
     if (g.size === 'king') {
       this.poison(cfg.king.poison.dps, cfg.king.poison.sec)
@@ -104,7 +108,9 @@ export class Game implements GooseWorld {
     this.elapsed += dt
     this.updatePlayer(dt, input.move)
     for (const g of this.geese) updateGoose(this, g, dt)
+    for (const w of this.workers) updateWorker(this, w, dt)
     this.updateStall(dt)
+    this.updateDelivery(dt)
     this.trackZone()
   }
 
@@ -140,6 +146,7 @@ export class Game implements GooseWorld {
       return false
     }
     this.emit({ type: 'bought', track, level: this.run.levels[track] })
+    if (track === 'ballboy' || track === 'wrangler') this.workers.push(makeWorker(track, this.clubPad))
     return true
   }
 
@@ -313,6 +320,7 @@ export class Game implements GooseWorld {
   protected fellTree(t: Tree, by: Attacker): void {
     t.lockedBy = null
     this.run.stats.trees++
+    this.checkMilestones()
     this.giveLoot(by, 'cork', Math.round((t.big ? TREE.big.cork : TREE.small.cork) * t.zone.dropMult), t)
   }
 
@@ -321,6 +329,7 @@ export class Game implements GooseWorld {
     g.target = null
     if (g.nest) g.nest.children--
     this.run.stats.geese++
+    this.checkMilestones()
     const base = g.size === 'king' ? KING.feathers : GOOSE[g.size].feathers
     this.giveLoot(by, 'feather', Math.round(base * g.zone.dropMult), g)
   }
@@ -330,7 +339,77 @@ export class Game implements GooseWorld {
     n.respawnLeft = NEST.respawnSec
   }
 
+  // --- WorkerWorld ---
+  get levels() { return this.run.levels }
+  get perks() { return this.run.perks }
+  get clubPad() { return this.padFor('clubhouse') }
+  get stallPad() { return this.padFor('stall') }
+
+  private padFor(id: BuildingId): Point {
+    const b = this.map.buildings.find((x) => x.id === id) ?? this.map.buildings[0]
+    return padOf(b)
+  }
+
+  takePile = (pile: Pile, w: Worker) => {
+    for (const kind of ['feather', 'cork'] as const) {
+      const n = Math.min(pile[kind], workerBagFree(w, this.run.levels))
+      pile[kind] -= n
+      w[kind] += n
+    }
+    this.piles = this.piles.filter((p) => p.cork + p.feather > 0)
+  }
+
+  sellWorkerBag = (w: Worker) => {
+    const total = w.cork * sellPrice('cork', this.run.levels) + w.feather * sellPrice('feather', this.run.levels)
+    w.cork = 0
+    w.feather = 0
+    if (total <= 0) return
+    this.run.earn(total)
+    this.emit({ type: 'float', x: w.x, y: w.y - 60, text: `+$${total}`, color: '#f8b800' })
+  }
+
+  private hurtWorker(w: Worker, dmg: number): void {
+    if (!this.run.cfg.workersCanDie || w.state === 'down') return
+    w.hp -= dmg
+    if (w.hp > 0) return
+    knockDown(w)
+    for (const g of this.geese) {
+      if (g.target === w) { g.target = null; g.state = 'wander' }
+    }
+    this.emit({ type: 'toast', text: `${w.kind === 'ballboy' ? '撿球小弟' : '趕鵝員'}被鵝打倒了，10 秒後在球友會館復活` })
+  }
+
   // --- economy ---
+  private updateDelivery(dt: number): void {
+    if (this.run.levels.delivery <= 0 || this.run.dead) return
+    this.deliveryCd += dt
+    const every = ECONOMY.deliveryEvery * (this.run.perks.complaints ? MILESTONES.complaintsDeliveryMult : 1)
+    if (this.deliveryCd < every) return
+    this.deliveryCd = 0
+    if (this.run.bagUsed <= 0) return
+    const amount = this.run.sellAll()
+    this.emit({ type: 'delivery', amount })
+    this.floatAtPlayer(`外送 +$${amount}`, '#f8b800')
+  }
+
+  private checkMilestones(): void {
+    const { stats, perks } = this.run
+    if (!perks.discount && stats.geese >= MILESTONES.geeseForDiscount) {
+      this.run.perks = { ...perks, discount: true }
+      this.emit({
+        type: 'notice', tone: 'info', title: '趕鵝有功',
+        lines: [`已經趕走 ${MILESTONES.geeseForDiscount} 隻鵝`, '公園管理處感謝你，之後所有升級打八折'],
+      })
+    }
+    if (!this.run.perks.complaints && stats.trees >= MILESTONES.treesForComplaints) {
+      this.run.perks = { ...this.run.perks, complaints: true }
+      this.emit({
+        type: 'notice', tone: 'warn', title: '公園客訴',
+        lines: [`已經砍了 ${MILESTONES.treesForComplaints} 棵樹`, '民眾抗議砍太多樹', '所有工人工作速度變成一半', `外送時間延長 ${MILESTONES.complaintsDeliveryMult} 倍`],
+      })
+    }
+  }
+
   private updateStall(dt: number): void {
     if (this.currentPad() !== 'stall') {
       this.sellCd = 0
@@ -354,8 +433,10 @@ export class Game implements GooseWorld {
     if (left > 0) this.dropPile(kind, left, at)
   }
 
-  protected giveWorkerLoot(_w: Worker, kind: Resource, amount: number, at: Point): void {
-    this.dropPile(kind, amount, at)
+  protected giveWorkerLoot(w: Worker, kind: Resource, amount: number, at: Point): void {
+    const n = Math.min(amount, workerBagFree(w, this.run.levels))
+    w[kind] += n
+    if (amount - n > 0) this.dropPile(kind, amount - n, at)
   }
 
   protected dropPile(kind: Resource, amount: number, at: Point): void {

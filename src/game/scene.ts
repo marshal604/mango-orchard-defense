@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { CustomerQueue } from './customers'
 import { PlayerInput } from './input'
 import type { Game, GameEvent } from './logic/game'
-import type { Goose } from './logic/entities'
+import type { Goose, Worker } from './logic/entities'
 import { padOf, type ZoneId } from './logic/map'
 import { addSprite, preloadSprites, setTexture, type Sprite } from './sprites'
 
@@ -29,6 +29,7 @@ export class WorldScene extends Phaser.Scene {
   private sprites = new Map<number, Sprite>()
   private stumped = new Set<number>()
   private customers: CustomerQueue | null = null
+  private workerSprites = new Map<Worker, Sprite>()
 
   constructor() {
     super('world')
@@ -129,6 +130,7 @@ export class WorldScene extends Phaser.Scene {
       this.track(n.id, () => addSprite(this, 'goose_nest', n.x, n.y).setDepth(n.y)).setVisible(n.alive)
     }
     for (const g of game.geese) this.syncGoose(g)
+    for (const w of game.workers) this.syncWorker(w)
     const live = new Set(game.piles.map((p) => p.id))
     for (const p of game.piles) {
       this.track(p.id, () => addSprite(this, p.feather > 0 ? 'icon_feather' : 'icon_cork', p.x, p.y).setDepth(p.y - 1).setData('pile', true))
@@ -154,6 +156,19 @@ export class WorldScene extends Phaser.Scene {
     const hop = g.biting ? Math.abs(Math.sin(this.hooks.game.elapsed * 20)) * 4 : 0
     sprite.setPosition(g.x, g.y - hop).setDepth(g.y)
     if (sprite instanceof Phaser.GameObjects.Image) sprite.setFlipX(g.facingRight)
+  }
+
+  private syncWorker(w: Worker) {
+    let s = this.workerSprites.get(w)
+    if (!s) {
+      s = addSprite(this, w.kind, w.x, w.y)
+      this.workerSprites.set(w, s)
+    }
+    const prev = s.x
+    const busy = w.target !== null && Math.hypot(w.target.x - w.x, w.target.y - w.y) < 80
+    const hop = busy ? Math.abs(Math.sin(this.hooks.game.elapsed * 12)) * 3 : 0
+    s.setPosition(w.x, w.y - hop).setDepth(w.y).setVisible(w.state !== 'down')
+    if (s instanceof Phaser.GameObjects.Image && w.x !== prev) s.setFlipX(w.x < prev)
   }
 
   private drawBars() {
