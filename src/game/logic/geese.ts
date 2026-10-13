@@ -42,6 +42,15 @@ function moveTo(g: Goose, x: number, y: number, speed: number, dt: number): bool
   return false
 }
 
+// Every goose chasing `a` stops; the King walks home, others resume wandering.
+export function forget(geese: readonly Goose[], a: Attacker) {
+  for (const g of geese) {
+    if (g.target !== a) continue
+    g.target = null
+    g.state = g.size === 'king' ? 'return' : 'wander'
+  }
+}
+
 export function aggro(g: Goose, a: Attacker) {
   if (!g.alive) return
   g.state = 'chase'

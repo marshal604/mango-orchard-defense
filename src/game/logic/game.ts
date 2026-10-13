@@ -1,30 +1,28 @@
 import type { BuildingId, Difficulty, Resource, Track } from './config'
-import { BUILDING, COMBAT, ECONOMY, GOOSE, KING, MILESTONES, NEST, PLAYER, SHADE, TRAPS, TREE } from './config'
+import { BUILDING, COMBAT, GOOSE, KING, NEST, PLAYER, SHADE, TRAPS, TREE } from './config'
+import { pickTarget } from './combat'
+import { reachMilestones, sellAtStall, tickDelivery, type EconomyClock } from './economy'
 import type { Attacker, Goose, GooseSize, Nest, Pile, Target, Tree, Worker } from './entities'
-import { aggro, gooseStats, updateGoose, type GooseWorld } from './geese'
-import { burnTick, makeHazards, moveMarathon, pushOutOfMarathon, trapAt, underShade, type HazardState } from './hazards'
+import { GOLD, type GameEvent, type Input } from './events'
+import { aggro, forget, updateGoose, type GooseWorld } from './geese'
+import { burnTick, makeHazards, moveMarathon, pushOutOfMarathon, stepShade, stepTrap, type HazardState } from './hazards'
+import { newPile, nonEmpty, takeFromPile, workerStash } from './loot'
 import type { GameMap, Point, ZoneId } from './map'
 import { DEFAULT_MAP, dist, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
+import { MSG, shadeNotice } from './messages'
 import { makeRng } from './rng'
-import { attackRange, playerSpeed, racketOf, RunState, sellInterval, sellPrice } from './run'
-import { knockDown, makeWorker, updateWorker, workerBagFree, type WorkerWorld } from './workers'
-import { makeGoose, makeNest, makeTree, newId, populate } from './world'
+import { attackRange, playerSpeed, racketOf, RunState } from './run'
+import { applyPeck, clearAilments, facingOf, freshStatus, tickBuffs, walk, type PeckEffects, type PlayerStatus } from './status'
+import { cashOut, damageWorker, makeWorker, updateWorker, type WorkerWorld } from './workers'
+import { makeGoose, makeNest, makeTree, populate, tickNests } from './world'
 
-export interface Input { move: Point }
+export type { GameEvent, Input } from './events'
+export type { PlayerStatus } from './status'
 
-export type GameEvent =
-  | { type: 'zone'; zone: ZoneId }
-  | { type: 'toast'; text: string }
-  | { type: 'float'; x: number; y: number; text: string; color: string }
-  | { type: 'hit'; target: Target | 'player' }
-  | { type: 'dead' }
-  | { type: 'revive' }
-  | { type: 'sale'; kind: Resource }
-  | { type: 'bought'; track: Track; level: number }
-  | { type: 'buyFail'; track: Track }
-  | { type: 'notice'; title: string; lines: string[]; tone: 'info' | 'warn' }
-  | { type: 'delivery'; amount: number }
-  | { type: 'win'; time: number }
+const pushed = <T>(list: T[], item: T): T => {
+  list.push(item)
+  return item
+}
 
 export interface GameOptions {
   difficulty: Difficulty
@@ -32,24 +30,7 @@ export interface GameOptions {
   map?: GameMap
 }
 
-export interface PlayerStatus {
-  poisonLeft: number
-  poisonDps: number
-  slowLeft: number
-  slowMult: number
-  hasteLeft: number
-  burnAbilityLeft: number
-  lockerLeft: number
-  invulnerableUntil: number
-  lastHurt: number
-  attackCd: number
-  swingUntil: number
-  facing: 'down' | 'up' | 'left' | 'right'
-  moving: boolean
-}
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
-
+// Headless rules for one Run. Phaser and React only read its state and call its public methods.
 export class Game implements GooseWorld, WorkerWorld {
   readonly difficulty: Difficulty
   readonly map: GameMap
@@ -61,17 +42,13 @@ export class Game implements GooseWorld, WorkerWorld {
   readonly nests: Nest[]
   readonly workers: Worker[] = []
   readonly king: Goose
+  readonly hazards: HazardState
   piles: Pile[] = []
-  status: PlayerStatus = {
-    poisonLeft: 0, poisonDps: 0, slowLeft: 0, slowMult: 1, hasteLeft: 0, burnAbilityLeft: 0, lockerLeft: 0,
-    invulnerableUntil: 0, lastHurt: 0, attackCd: 0, swingUntil: 0, facing: 'down', moving: false,
-  }
+  status: PlayerStatus = freshStatus()
   elapsed = 0
   finished = false
   zone: ZoneId
-  readonly hazards: HazardState
-  private sellCd = 0
-  private deliveryCd = 0
+  private clock: EconomyClock = { sellCd: 0, deliveryCd: 0 }
   private noRacket = false
   private needRacketAt = -Infinity
   private events: GameEvent[] = []
@@ -107,12 +84,26 @@ export class Game implements GooseWorld, WorkerWorld {
     const dmg = g.size === 'king' ? cfg.king.bite : (g.size === 'big' ? cfg.bigGooseBite : cfg.gooseBite) * g.zone.damageMult
     if (a !== 'player') return this.hurtWorker(a, dmg)
     if (!this.hurtPlayer(dmg) || this.run.dead) return
-    if (g.size === 'king') {
-      this.poison(cfg.king.poison.dps, cfg.king.poison.sec)
-      this.slow(cfg.king.slow.mult, cfg.king.slow.sec)
-    } else if (g.size === 'big') {
-      this.poison(cfg.bigGoosePoison.dps, cfg.bigGoosePoison.sec)
-    }
+    const fx: PeckEffects = g.size === 'king' ? cfg.king : g.size === 'big' ? { poison: cfg.bigGoosePoison } : {}
+    const started = applyPeck(this.status, fx)
+    if (started.poisoned) this.floatAtPlayer(MSG.poisoned, '#9cff6a')
+    if (started.slowed) this.floatAtPlayer(MSG.slowed, '#8fb8ff')
+  }
+
+  // --- WorkerWorld ---
+  get levels() { return this.run.levels }
+  get perks() { return this.run.perks }
+  get clubPad() { return this.padFor('clubhouse') }
+  get stallPad() { return this.padFor('stall') }
+  takePile = (pile: Pile, w: Worker) => {
+    takeFromPile(pile, workerStash(w, this.run.levels))
+    this.piles = nonEmpty(this.piles)
+  }
+  sellWorkerBag = (w: Worker) => {
+    const total = cashOut(w, this.run.levels)
+    if (total <= 0) return
+    this.run.earn(total)
+    this.emit({ type: 'float', x: w.x, y: w.y - 60, text: `+$${total}`, color: GOLD })
   }
 
   // --- public API ---
@@ -122,11 +113,13 @@ export class Game implements GooseWorld, WorkerWorld {
     this.updatePlayer(dt, input.move)
     for (const g of this.geese) updateGoose(this, g, dt)
     for (const w of this.workers) updateWorker(this, w, dt)
-    this.updateNests(dt)
-    this.updateBurns(dt)
+    for (const { nest, at } of tickNests(this.nests, dt, this.run.cfg.nestSpawnEvery, this.rng, this.map)) {
+      this.spawnGoose(at, 'small', nest)
+      nest.children++
+    }
+    for (const g of this.geese) if (g.burnLeft > 0) this.hit(g, burnTick(g, dt), 'player')
     if (this.hazards.marathon) moveMarathon(this.hazards.marathon, dt)
-    this.updateStall(dt)
-    this.updateDelivery(dt)
+    this.updateEconomy(dt)
     this.trackZone()
   }
 
@@ -142,7 +135,7 @@ export class Game implements GooseWorld, WorkerWorld {
     run.dead = false
     run.hp = run.hpMax
     if (mode === 'restart') {
-      Object.assign(this.player, spawnPoint(this.map))
+      this.teleport(spawnPoint(this.map))
       run.cork = 0
       run.feather = 0
       run.money = 0
@@ -178,225 +171,15 @@ export class Game implements GooseWorld, WorkerWorld {
   }
 
   spawnTree(p: Point, big: boolean): Tree {
-    const t = makeTree(this.map, p, big)
-    this.trees.push(t)
-    return t
+    return pushed(this.trees, makeTree(this.map, p, big))
   }
 
   spawnGoose(p: Point, size: GooseSize, nest: Nest | null = null): Goose {
-    const g = makeGoose(this.map, p, size, this.difficulty, nest)
-    this.geese.push(g)
-    return g
+    return pushed(this.geese, makeGoose(this.map, p, size, this.difficulty, nest))
   }
 
   spawnNest(p: Point): Nest {
-    const n = makeNest(this.map, p)
-    this.nests.push(n)
-    return n
-  }
-
-  protected emit(e: GameEvent): void {
-    this.events.push(e)
-  }
-
-  // --- player ---
-  private updatePlayer(dt: number, move: Point): void {
-    const run = this.run
-    const s = this.status
-    if (run.dead) return
-    if (s.poisonLeft > 0) {
-      s.poisonLeft -= dt
-      run.hp -= s.poisonDps * dt
-      s.lastHurt = this.elapsed
-      if (run.hp <= 0) return this.die()
-    }
-    if (s.hasteLeft > 0) s.hasteLeft -= dt
-    if (s.slowLeft > 0) s.slowLeft -= dt
-    if (s.burnAbilityLeft > 0) s.burnAbilityLeft -= dt
-    if (this.updateTrap(dt)) return
-    if (s.lockerLeft > 0) {
-      s.lockerLeft -= dt
-      run.hp -= TRAPS.locker.drainPerSec * dt
-      s.lastHurt = this.elapsed
-      if (run.hp <= 0) return this.die()
-    }
-    this.updateShade()
-    this.movePlayer(dt, move)
-    const m = this.hazards.marathon
-    const pushed = m && pushOutOfMarathon(m, this.player)
-    if (pushed) this.teleport(pushed)
-    this.attack(dt)
-    this.collectPiles()
-    this.regen(dt)
-  }
-
-  private movePlayer(dt: number, move: Point): void {
-    const len = Math.hypot(move.x, move.y)
-    this.status.moving = len > 0
-    if (len === 0) return
-    const s = this.status
-    s.facing = Math.abs(move.x) > Math.abs(move.y) ? (move.x < 0 ? 'left' : 'right') : (move.y < 0 ? 'up' : 'down')
-    const speed = playerSpeed(this.run.levels) * (s.slowLeft > 0 ? s.slowMult : 1) * (s.lockerLeft > 0 ? TRAPS.locker.speedMult : 1)
-    const scale = (Math.min(1, len) * speed * dt) / len
-    this.player.x = clamp(this.player.x + move.x * scale, 10, this.map.width - 10)
-    this.player.y = clamp(this.player.y + move.y * scale, 30, this.map.height)
-  }
-
-  private regen(dt: number): void {
-    const run = this.run
-    const r = run.cfg.regen
-    const ok = r.mode === 'outOfCombat'
-      ? this.elapsed - this.status.lastHurt >= r.delay
-      : inSafeArea(this.map, this.player)
-    const perSec = (ok ? r.perSec : 0) + (this.hazards.shaded ? SHADE.regenPerSec : 0)
-    if (perSec > 0 && run.hp < run.hpMax) run.hp = Math.min(run.hpMax, run.hp + perSec * dt)
-  }
-
-  // --- hazards ---
-  // Returns true while the player is locked inside a trap.
-  private updateTrap(dt: number): boolean {
-    const h = this.hazards
-    const trap = h.trapped
-    if (trap) {
-      trap.left -= dt
-      if (trap.left > 0) return true
-      h.trapped = null
-      this.teleport(trap.exit)
-      if (trap.kind === 'locker') {
-        this.status.lockerLeft = TRAPS.locker.effectSec
-        this.emit({ type: 'toast', text: `換好球衣了！${TRAPS.locker.effectSec} 秒內跑更快，但每秒掉 ${TRAPS.locker.drainPerSec} 滴血` })
-      } else {
-        this.status.burnAbilityLeft = TRAPS.roast.abilitySec
-        this.emit({ type: 'toast', text: `吃飽了！${TRAPS.roast.abilitySec} 秒內打到的鵝會著火` })
-      }
-      return false
-    }
-    const found = trapAt(this.map, this.player)
-    if (!found) {
-      h.armed = true
-      return false
-    }
-    if (!h.armed) return false
-    h.armed = false
-    h.trapped = found
-    this.dropAggro()
-    this.emit({ type: 'toast', text: found.kind === 'locker' ? '誤闖更衣室，被關 5 秒換衣服…' : '被烤鵝攤老闆拉去吃烤鵝，5 秒…' })
-    return true
-  }
-
-  private updateShade(): void {
-    const h = this.hazards
-    const now = underShade(this.map, this.player)
-    if (now && !h.shaded) {
-      this.dropAggro()
-      if (h.donated < SHADE.freeAfter) {
-        const fee = this.run.money
-        this.run.money = 0
-        h.donated += fee
-        this.emit({
-          type: 'notice', tone: 'info', title: '遮陽棚',
-          lines: ['遮陽棚是球友會募款搭的，進來要捐出身上所有現金', `（捐了 $${fee}，累積 $${h.donated}／$${SHADE.freeAfter}，滿額後免費）`, `在棚下每秒回 ${SHADE.regenPerSec} 滴血、鵝不會追你`],
-        })
-      }
-    }
-    h.shaded = now
-  }
-
-  private dropAggro(): void {
-    for (const g of this.geese) {
-      if (g.target !== 'player') continue
-      g.target = null
-      g.state = g.size === 'king' ? 'return' : 'wander'
-    }
-  }
-
-  private updateBurns(dt: number): void {
-    for (const g of this.geese) {
-      const dmg = burnTick(g, dt)
-      if (dmg > 0) this.hit(g, dmg, 'player')
-    }
-  }
-
-  private hurtPlayer(dmg: number): boolean {
-    if (this.run.dead || this.hazards.trapped || this.elapsed < this.status.invulnerableUntil) return false
-    this.run.hp -= dmg
-    this.status.lastHurt = this.elapsed
-    this.emit({ type: 'hit', target: 'player' })
-    if (this.run.hp <= 0) this.die()
-    return true
-  }
-
-  private poison(dps: number, sec: number): void {
-    const s = this.status
-    if (s.poisonLeft <= 0) this.floatAtPlayer('中毒！', '#9cff6a')
-    s.poisonDps = s.poisonLeft > 0 ? Math.max(s.poisonDps, dps) : dps
-    s.poisonLeft = Math.max(s.poisonLeft, sec)
-  }
-
-  private slow(mult: number, sec: number): void {
-    const s = this.status
-    if (s.slowLeft <= 0) this.floatAtPlayer('變慢！', '#8fb8ff')
-    s.slowLeft = Math.max(s.slowLeft, sec)
-    s.slowMult = mult
-  }
-
-  private die(): void {
-    const run = this.run
-    run.hp = 0
-    run.dead = true
-    run.stats.deaths++
-    Object.assign(this.status, { poisonLeft: 0, slowLeft: 0, swingUntil: 0, lockerLeft: 0 })
-    this.hazards.trapped = null
-    this.dropAggro()
-    this.emit({ type: 'dead' })
-  }
-
-  // --- combat ---
-  private attackInterval(): number {
-    const racket = racketOf(this.run.levels)
-    if (!racket) return Infinity
-    return racket.interval / (this.status.hasteLeft > 0 ? NEST.haste.mult : 1)
-  }
-
-  private attack(dt: number): void {
-    const s = this.status
-    s.attackCd -= dt
-    const racket = racketOf(this.run.levels)
-    if (this.noRacket || !racket || s.attackCd > 0) return
-    const target = this.pickTarget(racket.canBigTree)
-    if (!target) return
-    s.attackCd = this.attackInterval()
-    s.swingUntil = this.elapsed + s.attackCd
-    this.hit(target, racket.damage, 'player')
-  }
-
-  private pickTarget(canBigTree: boolean): Target | null {
-    const range = attackRange(this.run.levels)
-    const p = this.player
-    const inRange = (x: number, y: number, r: number) => dist(p, { x, y }) <= range + r
-    const nearest = <T extends Target>(list: readonly T[], ok: (t: T) => boolean): T | null => {
-      let best: T | null = null
-      let bestD = Infinity
-      for (const t of list) {
-        if (!t.alive || !ok(t)) continue
-        const d = dist(p, t)
-        if (d < bestD) { bestD = d; best = t }
-      }
-      return best
-    }
-    const gooseIn = (g: Goose) => inRange(g.x, g.y, gooseStats(g).hitRadius)
-    const found = nearest(this.geese, (g) => g.target === 'player' && gooseIn(g))
-      ?? nearest(this.geese, gooseIn)
-      ?? nearest(this.nests, (n) => inRange(n.x, n.y, NEST.hitRadius))
-      ?? nearest(this.trees, (t) => (canBigTree || !t.big) && inRange(t.x, t.y, t.hitRadius))
-    if (found || canBigTree) return found
-    const oak = nearest(this.trees, (t) => t.big && inRange(t.x, t.y, t.hitRadius))
-    if (oak && this.elapsed - this.needRacketAt > COMBAT.needRacketHintEvery) {
-      this.needRacketAt = this.elapsed
-      this.emit({ type: 'float', x: oak.x, y: oak.y - 60, text: '需要碳纖拍', color: '#f8b800' })
-      this.emit({ type: 'toast', text: '老軟木橡樹要碳纖拍才砍得動：到球拍專賣店升級球拍' })
-    }
-    return null
+    return pushed(this.nests, makeNest(this.map, p))
   }
 
   hit(target: Target, damage: number, by: Attacker): void {
@@ -415,172 +198,194 @@ export class Game implements GooseWorld, WorkerWorld {
     else this.destroyNest(target)
   }
 
-  protected fellTree(t: Tree, by: Attacker): void {
+  private emit(e: GameEvent): void {
+    this.events.push(e)
+  }
+
+  // --- player ---
+  private updatePlayer(dt: number, move: Point): void {
+    const s = this.status
+    if (this.run.dead) return
+    if (s.poisonLeft > 0) {
+      s.poisonLeft -= dt
+      if (this.drain(s.poisonDps * dt)) return
+    }
+    tickBuffs(s, dt)
+    if (this.updateTrap(dt)) return
+    if (s.lockerLeft > 0) {
+      s.lockerLeft -= dt
+      if (this.drain(TRAPS.locker.drainPerSec * dt)) return
+    }
+    this.updateShade()
+    this.movePlayer(dt, move)
+    const m = this.hazards.marathon
+    const pushed = m && pushOutOfMarathon(m, this.player)
+    if (pushed) this.teleport(pushed)
+    this.attack(dt)
+    this.collectPiles()
+    this.regen(dt)
+  }
+
+  // Damage over time that ignores invulnerability; returns true if it knocked the player down.
+  private drain(amount: number): boolean {
+    this.run.hp -= amount
+    this.status.lastHurt = this.elapsed
+    if (this.run.hp > 0) return false
+    this.die()
+    return true
+  }
+
+  private movePlayer(dt: number, move: Point): void {
+    const s = this.status
+    const speed = playerSpeed(this.run.levels) * (s.slowLeft > 0 ? s.slowMult : 1) * (s.lockerLeft > 0 ? TRAPS.locker.speedMult : 1)
+    s.moving = walk(this.player, move, speed, dt, this.map)
+    if (s.moving) s.facing = facingOf(move.x, move.y)
+  }
+
+  private regen(dt: number): void {
+    const run = this.run
+    const r = run.cfg.regen
+    const ok = r.mode === 'outOfCombat'
+      ? this.elapsed - this.status.lastHurt >= r.delay
+      : inSafeArea(this.map, this.player)
+    const perSec = (ok ? r.perSec : 0) + (this.hazards.shaded ? SHADE.regenPerSec : 0)
+    if (perSec > 0 && run.hp < run.hpMax) run.hp = Math.min(run.hpMax, run.hp + perSec * dt)
+  }
+
+  private hurtPlayer(dmg: number): boolean {
+    if (this.run.dead || this.hazards.trapped || this.elapsed < this.status.invulnerableUntil) return false
+    this.run.hp -= dmg
+    this.status.lastHurt = this.elapsed
+    this.emit({ type: 'hit', target: 'player' })
+    if (this.run.hp <= 0) this.die()
+    return true
+  }
+
+  private die(): void {
+    const run = this.run
+    run.hp = 0
+    run.dead = true
+    run.stats.deaths++
+    clearAilments(this.status)
+    this.hazards.trapped = null
+    forget(this.geese, 'player')
+    this.emit({ type: 'dead' })
+  }
+
+  // --- hazards ---
+  // Returns true while the player is locked inside a trap.
+  private updateTrap(dt: number): boolean {
+    const step = stepTrap(this.hazards, this.map, this.player, dt)
+    if (step.kind === 'locked') return true
+    if (step.kind === 'entered') {
+      forget(this.geese, 'player')
+      this.emit({ type: 'toast', text: MSG.trapEnter(step.trap.kind) })
+      return true
+    }
+    if (step.kind === 'released') {
+      this.teleport(step.trap.exit)
+      Object.assign(this.status, step.trap.kind === 'locker' ? { lockerLeft: TRAPS.locker.effectSec } : { burnAbilityLeft: TRAPS.roast.abilitySec })
+      this.emit({ type: 'toast', text: MSG.trapLeave(step.trap.kind) })
+    }
+    return false
+  }
+
+  private updateShade(): void {
+    const fee = stepShade(this.hazards, this.map, this.player, this.run.money)
+    if (fee === null) return
+    forget(this.geese, 'player')
+    if (fee === 0 && this.hazards.donated >= SHADE.freeAfter) return
+    this.run.money -= fee
+    this.emit(shadeNotice(fee, this.hazards.donated))
+  }
+
+  // --- combat ---
+  private attack(dt: number): void {
+    const s = this.status
+    s.attackCd -= dt
+    const racket = racketOf(this.run.levels)
+    if (this.noRacket || !racket || s.attackCd > 0) return
+    const { target, blockedOak } = pickTarget(this.player, attackRange(this.run.levels), racket.canBigTree, this)
+    if (blockedOak && this.elapsed - this.needRacketAt > COMBAT.needRacketHintEvery) {
+      this.needRacketAt = this.elapsed
+      this.emit({ type: 'float', x: blockedOak.x, y: blockedOak.y - 60, text: MSG.needCarbon, color: GOLD })
+      this.emit({ type: 'toast', text: MSG.needCarbonToast })
+    }
+    if (!target) return
+    s.attackCd = racket.interval / (s.hasteLeft > 0 ? NEST.haste.mult : 1)
+    s.swingUntil = this.elapsed + s.attackCd
+    this.hit(target, racket.damage, 'player')
+  }
+
+  private fellTree(t: Tree, by: Attacker): void {
     t.lockedBy = null
     this.run.stats.trees++
-    this.checkMilestones()
+    this.reachMilestones()
     this.giveLoot(by, 'cork', Math.round((t.big ? TREE.big.cork : TREE.small.cork) * t.zone.dropMult), t)
   }
 
-  protected defeatGoose(g: Goose, by: Attacker): void {
+  private defeatGoose(g: Goose, by: Attacker): void {
     g.lockedBy = null
     g.target = null
     if (g.nest) g.nest.children--
     this.run.stats.geese++
-    this.checkMilestones()
+    this.reachMilestones()
     const base = g.size === 'king' ? KING.feathers : GOOSE[g.size].feathers
     this.giveLoot(by, 'feather', Math.round(base * g.zone.dropMult), g)
     if (g.size !== 'king') return
     this.finished = true
-    this.emit({ type: 'float', x: g.x, y: g.y - 100, text: '打倒鵝王！', color: '#f8b800' })
+    this.emit({ type: 'float', x: g.x, y: g.y - 100, text: MSG.kingDown, color: GOLD })
     this.emit({ type: 'win', time: this.elapsed })
   }
 
-  protected destroyNest(n: Nest): void {
+  private destroyNest(n: Nest): void {
     this.run.stats.nests++
     n.respawnLeft = NEST.respawnSec
     this.run.earn(NEST.reward)
     this.status.hasteLeft = NEST.haste.sec
-    this.emit({ type: 'float', x: n.x, y: n.y - 60, text: `拆鵝窩 +$${NEST.reward}　攻速 x${NEST.haste.mult}`, color: '#f8b800' })
+    this.emit({ type: 'float', x: n.x, y: n.y - 60, text: MSG.nestDown, color: GOLD })
   }
 
-  private updateNests(dt: number): void {
-    const every = this.run.cfg.nestSpawnEvery
-    for (const n of this.nests) {
-      if (!n.alive) {
-        n.respawnLeft -= dt
-        if (n.respawnLeft <= 0) Object.assign(n, { alive: true, hp: NEST.hp, spawnCd: 0 })
-        continue
-      }
-      n.spawnCd += dt
-      if (n.spawnCd < every) continue
-      n.spawnCd = 0
-      if (n.children >= NEST.maxAlive) continue
-      const angle = this.rng() * Math.PI * 2
-      const p = {
-        x: clamp(n.x + Math.cos(angle) * NEST.spawnRadius, 10, this.map.width - 10),
-        y: clamp(n.y + Math.sin(angle) * NEST.spawnRadius, 30, this.map.height - 10),
-      }
-      this.spawnGoose(p, 'small', n)
-      n.children++
-    }
+  private updateEconomy(dt: number): void {
+    for (const kind of sellAtStall(this.run, this.clock, dt, this.currentPad() === 'stall')) this.emit({ type: 'sale', kind })
+    const delivered = tickDelivery(this.run, this.clock, dt)
+    if (delivered === null) return
+    this.emit({ type: 'delivery', amount: delivered })
+    this.floatAtPlayer(MSG.delivery(delivered), GOLD)
   }
 
-  // --- WorkerWorld ---
-  get levels() { return this.run.levels }
-  get perks() { return this.run.perks }
-  get clubPad() { return this.padFor('clubhouse') }
-  get stallPad() { return this.padFor('stall') }
+  private reachMilestones(): void {
+    for (const notice of reachMilestones(this.run)) this.emit(notice)
+  }
 
+  // --- workers ---
   private padFor(id: BuildingId): Point {
     const b = this.map.buildings.find((x) => x.id === id) ?? this.map.buildings[0]
     return padOf(b)
   }
 
-  takePile = (pile: Pile, w: Worker) => {
-    for (const kind of ['feather', 'cork'] as const) {
-      const n = Math.min(pile[kind], workerBagFree(w, this.run.levels))
-      pile[kind] -= n
-      w[kind] += n
-    }
-    this.piles = this.piles.filter((p) => p.cork + p.feather > 0)
-  }
-
-  sellWorkerBag = (w: Worker) => {
-    const total = w.cork * sellPrice('cork', this.run.levels) + w.feather * sellPrice('feather', this.run.levels)
-    w.cork = 0
-    w.feather = 0
-    if (total <= 0) return
-    this.run.earn(total)
-    this.emit({ type: 'float', x: w.x, y: w.y - 60, text: `+$${total}`, color: '#f8b800' })
-  }
-
   private hurtWorker(w: Worker, dmg: number): void {
-    if (!this.run.cfg.workersCanDie || w.state === 'down') return
-    w.hp -= dmg
-    if (w.hp > 0) return
-    knockDown(w)
-    for (const g of this.geese) {
-      if (g.target === w) { g.target = null; g.state = 'wander' }
-    }
-    this.emit({ type: 'toast', text: `${w.kind === 'ballboy' ? '撿球小弟' : '趕鵝員'}被鵝打倒了，10 秒後在球友會館復活` })
-  }
-
-  // --- economy ---
-  private updateDelivery(dt: number): void {
-    if (this.run.levels.delivery <= 0 || this.run.dead) return
-    this.deliveryCd += dt
-    const every = ECONOMY.deliveryEvery * (this.run.perks.complaints ? MILESTONES.complaintsDeliveryMult : 1)
-    if (this.deliveryCd < every) return
-    this.deliveryCd = 0
-    if (this.run.bagUsed <= 0) return
-    const amount = this.run.sellAll()
-    this.emit({ type: 'delivery', amount })
-    this.floatAtPlayer(`外送 +$${amount}`, '#f8b800')
-  }
-
-  private checkMilestones(): void {
-    const { stats, perks } = this.run
-    if (!perks.discount && stats.geese >= MILESTONES.geeseForDiscount) {
-      this.run.perks = { ...perks, discount: true }
-      this.emit({
-        type: 'notice', tone: 'info', title: '趕鵝有功',
-        lines: [`已經趕走 ${MILESTONES.geeseForDiscount} 隻鵝`, '公園管理處感謝你，之後所有升級打八折'],
-      })
-    }
-    if (!this.run.perks.complaints && stats.trees >= MILESTONES.treesForComplaints) {
-      this.run.perks = { ...this.run.perks, complaints: true }
-      this.emit({
-        type: 'notice', tone: 'warn', title: '公園客訴',
-        lines: [`已經砍了 ${MILESTONES.treesForComplaints} 棵樹`, '民眾抗議砍太多樹', '所有工人工作速度變成一半', `外送時間延長 ${MILESTONES.complaintsDeliveryMult} 倍`],
-      })
-    }
-  }
-
-  private updateStall(dt: number): void {
-    if (this.currentPad() !== 'stall') {
-      this.sellCd = 0
-      return
-    }
-    this.sellCd -= dt
-    while (this.sellCd <= 0 && this.run.bagUsed > 0) {
-      const kind = this.run.sellOne()
-      if (!kind) break
-      this.sellCd += sellInterval(this.run.levels)
-      this.emit({ type: 'sale', kind })
-    }
-    if (this.sellCd < 0) this.sellCd = 0
+    if (!this.run.cfg.workersCanDie || !damageWorker(w, dmg)) return
+    forget(this.geese, w)
+    this.emit({ type: 'toast', text: MSG.workerDown(w) })
   }
 
   // --- loot ---
-  protected giveLoot(by: Attacker, kind: Resource, amount: number, at: Point): void {
-    if (by !== 'player') return this.giveWorkerLoot(by, kind, amount, at)
-    const left = this.run.add(kind, amount)
-    if (amount - left > 0) this.emit({ type: 'float', x: at.x, y: at.y - 40, text: `+${amount - left}`, color: '#f8f8f8' })
-    if (left > 0) this.dropPile(kind, left, at)
-  }
-
-  protected giveWorkerLoot(w: Worker, kind: Resource, amount: number, at: Point): void {
-    const n = Math.min(amount, workerBagFree(w, this.run.levels))
-    w[kind] += n
-    if (amount - n > 0) this.dropPile(kind, amount - n, at)
-  }
-
-  protected dropPile(kind: Resource, amount: number, at: Point): void {
-    const pile: Pile = { id: newId(), x: at.x, y: at.y, cork: 0, feather: 0 }
-    pile[kind] = amount
-    this.piles = [...this.piles, pile]
+  private giveLoot(by: Attacker, kind: Resource, amount: number, at: Point): void {
+    const left = by === 'player' ? this.run.add(kind, amount) : workerStash(by, this.run.levels)(kind, amount)
+    if (by === 'player' && amount - left > 0) {
+      this.emit({ type: 'float', x: at.x, y: at.y - 40, text: `+${amount - left}`, color: '#f8f8f8' })
+    }
+    if (left > 0) this.piles = [...this.piles, newPile(kind, left, at)]
   }
 
   private collectPiles(): void {
     const run = this.run
     for (const pile of this.piles) {
       if (run.bagFree <= 0) break
-      if (dist(this.player, pile) > PLAYER.pickupRadius) continue
-      pile.feather = run.add('feather', pile.feather)
-      pile.cork = run.add('cork', pile.cork)
+      if (dist(this.player, pile) <= PLAYER.pickupRadius) takeFromPile(pile, (k, n) => run.add(k, n))
     }
-    this.piles = this.piles.filter((p) => p.cork + p.feather > 0)
+    this.piles = nonEmpty(this.piles)
   }
 
   private floatAtPlayer(text: string, color: string): void {

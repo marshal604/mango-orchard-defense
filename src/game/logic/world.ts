@@ -85,3 +85,30 @@ export function populate(map: GameMap, rng: () => number, difficulty: Difficulty
   }
   return { trees, geese, nests }
 }
+
+export const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+
+// Regrows destroyed nests and returns spawn points for new geese (the caller links them to the nest).
+export function tickNests(nests: readonly Nest[], dt: number, every: number, rng: () => number, map: GameMap) {
+  const spawns: { nest: Nest; at: Point }[] = []
+  for (const n of nests) {
+    if (!n.alive) {
+      n.respawnLeft -= dt
+      if (n.respawnLeft <= 0) Object.assign(n, { alive: true, hp: NEST.hp, spawnCd: 0 })
+      continue
+    }
+    n.spawnCd += dt
+    if (n.spawnCd < every) continue
+    n.spawnCd = 0
+    if (n.children >= NEST.maxAlive) continue
+    const angle = rng() * Math.PI * 2
+    spawns.push({
+      nest: n,
+      at: {
+        x: clamp(n.x + Math.cos(angle) * NEST.spawnRadius, 10, map.width - 10),
+        y: clamp(n.y + Math.sin(angle) * NEST.spawnRadius, 30, map.height - 10),
+      },
+    })
+  }
+  return spawns
+}

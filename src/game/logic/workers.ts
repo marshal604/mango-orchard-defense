@@ -3,6 +3,7 @@ import type { Goose, Pile, Tree, Worker } from './entities'
 import { gooseStats } from './geese'
 import type { Point } from './map'
 import type { Levels, Perks } from './run'
+import { sellPrice } from './run'
 
 // What worker AI needs from the world. Implemented by Game.
 export interface WorkerWorld {
@@ -134,4 +135,21 @@ export function knockDown(w: Worker) {
   release(w)
   w.state = 'down'
   w.downLeft = WORKER.respawnDelay
+}
+
+// Empties the worker's bag; returns its sale value at current prices.
+export function cashOut(w: Worker, levels: Levels): number {
+  const total = w.cork * sellPrice('cork', levels) + w.feather * sellPrice('feather', levels)
+  w.cork = 0
+  w.feather = 0
+  return total
+}
+
+// Returns true when this hit knocked the worker down.
+export function damageWorker(w: Worker, dmg: number): boolean {
+  if (w.state === 'down') return false
+  w.hp -= dmg
+  if (w.hp > 0) return false
+  knockDown(w)
+  return true
 }

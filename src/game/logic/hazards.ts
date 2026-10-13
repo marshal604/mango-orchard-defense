@@ -97,3 +97,40 @@ export function burnTick(g: Goose, dt: number): number {
   g.burnLeft -= dt
   return TRAPS.roast.burn.dps * dt
 }
+
+export type TrapStep =
+  | { kind: 'free' }
+  | { kind: 'locked' }
+  | { kind: 'entered'; trap: Trap }
+  | { kind: 'released'; trap: Trap }
+
+// Advances the trap lock. A trap re-arms only after the player has left every trap area.
+export function stepTrap(h: HazardState, map: GameMap, p: Point, dt: number): TrapStep {
+  const trap = h.trapped
+  if (trap) {
+    trap.left -= dt
+    if (trap.left > 0) return { kind: 'locked' }
+    h.trapped = null
+    return { kind: 'released', trap }
+  }
+  const found = trapAt(map, p)
+  if (!found) {
+    h.armed = true
+    return { kind: 'free' }
+  }
+  if (!h.armed) return { kind: 'free' }
+  h.armed = false
+  h.trapped = found
+  return { kind: 'entered', trap: found }
+}
+
+// Updates the shaded flag. On stepping under a tent returns the fee to take (0 once fully donated), else null.
+export function stepShade(h: HazardState, map: GameMap, p: Point, money: number): number | null {
+  const now = underShade(map, p)
+  const entered = now && !h.shaded
+  h.shaded = now
+  if (!entered) return null
+  const fee = h.donated >= SHADE.freeAfter ? 0 : money
+  h.donated += fee
+  return fee
+}
