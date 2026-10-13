@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { CustomerQueue } from './customers'
 import { PlayerInput } from './input'
-import { DEN, VIEW } from './logic/config'
+import { DEN, viewZoom } from './logic/config'
 import type { Game, GameEvent } from './logic/game'
 import { padOf, type Point, type ZoneId } from './logic/map'
 import { TRAP_TEXT } from './logic/messages'
@@ -106,7 +106,7 @@ export class WorldScene extends Phaser.Scene {
   private fitCamera() {
     const cam = this.cameras.main
     const dpr = dprOf()
-    const zoom = dpr * VIEW.zoom
+    const zoom = dpr * viewZoom(this.scale.width / dpr, this.scale.height / dpr)
     const { top, bottom } = this.hooks.cover()
     cam.setZoom(zoom)
     cam.setFollowOffset(0, ((top - bottom) / 2) * dpr / zoom)

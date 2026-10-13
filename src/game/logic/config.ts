@@ -180,7 +180,16 @@ export const SUGGEST_ORDER: readonly Track[] = [
   'range', 'shoes', 'window', 'workerTool', 'cart', 'delivery',
 ]
 
-export const VIEW = { maxPixelRatio: 2, zoom: 0.7 } as const
+// Camera zoom in CSS pixels per world unit. Art is drawn at 2x, so zoom 1 on a 2x screen maps one
+// texel to one device pixel (sharpest). Phones keep more of the map in view.
+export const VIEW = { maxPixelRatio: 2, phoneZoom: 0.85, wideFrom: 700, wideWorldHeight: 600, wideZoom: [1, 1.6] } as const
+
+// Phones keep the original's wide view; larger windows show about wideWorldHeight of world vertically.
+export function viewZoom(cssWidth: number, cssHeight: number): number {
+  if (cssWidth < VIEW.wideFrom) return VIEW.phoneZoom
+  const [lo, hi] = VIEW.wideZoom
+  return Math.min(hi, Math.max(lo, cssHeight / VIEW.wideWorldHeight))
+}
 
 // Gold guide arrow hides once the player is this close to its target.
 export const GUIDE = { arrowHideDist: 220, kingHideDist: 280 } as const

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { viewZoom } from './config'
 import { Game } from './game'
 import { DEFAULT_MAP, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
 import { emptyMap } from './testMap'
@@ -86,5 +87,14 @@ describe('solid trunks and buildings', () => {
     game.teleport({ x: stall.x, y: stall.y + stall.h / 2 + 30 })
     for (let i = 0; i < 20; i++) game.step(0.05, { move: { x: 0, y: -1 } })
     expect(game.player.y).toBeGreaterThan(stall.y + stall.h / 2 - stall.h * 0.5)
+  })
+})
+
+describe('view zoom', () => {
+  it('keeps phones at 0.85 and scales big windows to show about 600 px of world, capped at 1.6', () => {
+    expect(viewZoom(412, 860)).toBe(0.85)
+    expect(viewZoom(1440, 900)).toBe(1.5)
+    expect(viewZoom(1280, 500)).toBe(1)
+    expect(viewZoom(2560, 1440)).toBe(1.6)
   })
 })
