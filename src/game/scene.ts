@@ -1,15 +1,18 @@
 import Phaser from 'phaser'
-import type { Game, GameEvent, Input } from './logic/game'
+import { PlayerInput } from './input'
+import type { Game, GameEvent } from './logic/game'
+import type { Goose } from './logic/entities'
 import type { ZoneId } from './logic/map'
+import { addSprite, preloadSprites, setTexture, type Sprite } from './sprites'
 
-const ZONE_COLORS: Record<ZoneId, number> = {
-  lakeside: 0x2c6c3c,
-  wetland: 0x6b5a3a,
-  park: 0x4ca83c,
-  arena: 0x8c8c9c,
+const ZONE_STYLE: Record<ZoneId, { color: number; tile: string }> = {
+  lakeside: { color: 0x2c6c3c, tile: 'tile_lake' },
+  wetland: { color: 0x6b5a3a, tile: 'tile_wetland' },
+  park: { color: 0x4ca83c, tile: 'tile_park' },
+  arena: { color: 0x8c8c9c, tile: 'tile_arena' },
 }
 
-const JOYSTICK = { radius: 48, knob: 22, deadZone: 0.15 }
+const GOOSE_KEY: Record<Goose['size'], string> = { small: 'goose', big: 'big_goose', king: 'goose_king' }
 
 export interface SceneHooks {
   game: Game
@@ -19,12 +22,11 @@ export interface SceneHooks {
 
 export class WorldScene extends Phaser.Scene {
   private hooks!: SceneHooks
-  private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>
-  private playerSprite!: Phaser.GameObjects.Arc
-  private stickBase!: Phaser.GameObjects.Arc
-  private stickKnob!: Phaser.GameObjects.Arc
-  private touchOrigin: Phaser.Math.Vector2 | null = null
-  private touchVec = { x: 0, y: 0 }
+  private input2!: PlayerInput
+  private player!: Sprite
+  private bars!: Phaser.GameObjects.Graphics
+  private sprites = new Map<number, Sprite>()
+  private stumped = new Set<number>()
 
   constructor() {
     super('world')
@@ -34,72 +36,145 @@ export class WorldScene extends Phaser.Scene {
     this.hooks = hooks
   }
 
+  preload() {
+    preloadSprites(this)
+  }
+
   create() {
     const { game } = this.hooks
-    for (const z of game.map.zones) {
-      this.add.rectangle(z.rect.x, z.rect.y, z.rect.w, z.rect.h, ZONE_COLORS[z.id]).setOrigin(0, 0)
+    this.drawGround()
+    for (const b of game.map.buildings) {
+      const s = addSprite(this, b.id, b.x, b.y + b.h / 2).setDepth(b.y + b.h / 2)
+      if (s instanceof Phaser.GameObjects.Image) s.setScale(Math.min(b.w / s.width, (b.h * 1.2) / s.height))
+      this.add.ellipse(b.x, b.y + b.h / 2 + 40, 60, 30, 0xf8b800, 0.35).setStrokeStyle(2, 0xf8b800).setDepth(1)
+      this.add.text(b.x, b.y - b.h / 2 - 10, b.name, { fontSize: '20px', color: '#f8f8f8', stroke: '#000', strokeThickness: 4 })
+        .setOrigin(0.5, 1).setDepth(1e6)
     }
-    this.playerSprite = this.add.circle(game.player.x, game.player.y, 16, 0xffffff).setStrokeStyle(3, 0x1c1c1c)
+    this.player = addSprite(this, 'player', game.player.x, game.player.y)
+    this.bars = this.add.graphics().setDepth(1e6)
 
     const cam = this.cameras.main
     cam.setBounds(0, 0, game.map.width, game.map.height)
     cam.setZoom(0.7)
-    cam.startFollow(this.playerSprite, true, 0.15, 0.15)
-
-    const kb = this.input.keyboard
-    if (kb) {
-      this.keys = {
-        up: kb.addKey('UP'), down: kb.addKey('DOWN'), left: kb.addKey('LEFT'), right: kb.addKey('RIGHT'),
-        w: kb.addKey('W'), a: kb.addKey('A'), s: kb.addKey('S'), d: kb.addKey('D'),
-      }
-    }
-    this.createJoystick()
+    cam.startFollow(this.player, true, 0.15, 0.15)
+    this.input2 = new PlayerInput(this)
   }
 
   update(_time: number, deltaMs: number) {
     if (this.hooks.isPaused()) return
     const { game } = this.hooks
-    game.step(Math.min(deltaMs / 1000, 0.1), this.readInput())
-    this.playerSprite.setPosition(game.player.x, game.player.y)
+    game.step(Math.min(deltaMs / 1000, 0.1), this.input2.read())
+    this.syncPlayer()
+    this.syncWorld()
+    this.drawBars()
     const events = game.drainEvents()
+    for (const e of events) this.renderEvent(e)
     if (events.length) this.hooks.onEvents(events)
   }
 
-  private readInput(): Input {
-    const k = this.keys
-    const kx = k ? Number(k.right.isDown || k.d.isDown) - Number(k.left.isDown || k.a.isDown) : 0
-    const ky = k ? Number(k.down.isDown || k.s.isDown) - Number(k.up.isDown || k.w.isDown) : 0
-    if (kx !== 0 || ky !== 0) return { move: { x: kx, y: ky } }
-    return { move: this.touchVec }
+  private drawGround() {
+    for (const z of this.hooks.game.map.zones) {
+      const { color, tile } = ZONE_STYLE[z.id]
+      if (this.textures.exists(tile)) {
+        this.add.tileSprite(z.rect.x, z.rect.y, z.rect.w, z.rect.h, tile).setOrigin(0, 0).setTileScale(0.5)
+      } else {
+        this.add.rectangle(z.rect.x, z.rect.y, z.rect.w, z.rect.h, color).setOrigin(0, 0)
+      }
+    }
   }
 
-  private createJoystick() {
-    this.stickBase = this.add.circle(0, 0, JOYSTICK.radius, 0x000000, 0.25).setScrollFactor(0).setVisible(false).setDepth(1e6)
-    this.stickKnob = this.add.circle(0, 0, JOYSTICK.knob, 0xffffff, 0.6).setScrollFactor(0).setVisible(false).setDepth(1e6)
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      this.touchOrigin = new Phaser.Math.Vector2(p.x, p.y)
-      this.stickBase.setPosition(p.x, p.y).setVisible(true)
-      this.stickKnob.setPosition(p.x, p.y).setVisible(true)
-    })
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      if (!this.touchOrigin || !p.isDown) return
-      const dx = p.x - this.touchOrigin.x
-      const dy = p.y - this.touchOrigin.y
-      const len = Math.hypot(dx, dy)
-      const clamped = Math.min(len, JOYSTICK.radius)
-      const nx = len ? dx / len : 0
-      const ny = len ? dy / len : 0
-      this.stickKnob.setPosition(this.touchOrigin.x + nx * clamped, this.touchOrigin.y + ny * clamped)
-      const mag = clamped / JOYSTICK.radius
-      this.touchVec = mag < JOYSTICK.deadZone ? { x: 0, y: 0 } : { x: nx * mag, y: ny * mag }
-    })
-    const release = () => {
-      this.touchOrigin = null
-      this.touchVec = { x: 0, y: 0 }
-      this.stickBase.setVisible(false)
-      this.stickKnob.setVisible(false)
+  private syncPlayer() {
+    const { game } = this.hooks
+    const p = this.player
+    const s = game.status
+    const bob = s.moving ? Math.abs(Math.sin(game.elapsed * 14)) * 4 : 0
+    p.setPosition(game.player.x, game.player.y - bob).setDepth(game.player.y)
+    p.setAlpha(game.run.dead ? 0.4 : 1)
+    if (p instanceof Phaser.GameObjects.Image) {
+      if (s.facing === 'left' || s.facing === 'right') p.setFlipX(s.facing === 'left')
+      const swinging = game.elapsed < s.swingUntil
+      const base = 56 / p.height
+      p.setScale(swinging ? base * 1.08 : base, swinging ? base * 0.94 : base)
+      if (s.poisonLeft > 0) p.setTint(0x9cff6a)
+      else if (s.slowLeft > 0) p.setTint(0x8fb8ff)
+      else p.clearTint()
     }
-    this.input.on('pointerup', release)
-    this.input.on('pointerupoutside', release)
+  }
+
+  private track(id: number, make: () => Sprite): Sprite {
+    let s = this.sprites.get(id)
+    if (!s) {
+      s = make()
+      this.sprites.set(id, s)
+    }
+    return s
+  }
+
+  private syncWorld() {
+    const { game } = this.hooks
+    for (const t of game.trees) {
+      const s = this.track(t.id, () => addSprite(this, t.big ? 'cork_oak' : 'cork_tree', t.x, t.y).setDepth(t.y))
+      if (!t.alive && !this.stumped.has(t.id)) {
+        this.stumped.add(t.id)
+        setTexture(this, s, 'stump')
+        s.setDepth(t.y - 1000)
+      }
+    }
+    for (const n of game.nests) {
+      this.track(n.id, () => addSprite(this, 'goose_nest', n.x, n.y).setDepth(n.y)).setVisible(n.alive)
+    }
+    for (const g of game.geese) this.syncGoose(g)
+    const live = new Set(game.piles.map((p) => p.id))
+    for (const p of game.piles) {
+      this.track(p.id, () => addSprite(this, p.feather > 0 ? 'icon_feather' : 'icon_cork', p.x, p.y).setDepth(p.y - 1).setData('pile', true))
+    }
+    for (const [id, s] of this.sprites) {
+      if (s.getData('pile') && !live.has(id)) {
+        s.destroy()
+        this.sprites.delete(id)
+      }
+    }
+  }
+
+  private syncGoose(g: Goose) {
+    const s = this.sprites.get(g.id)
+    if (!g.alive) {
+      if (s && !s.getData('dying')) {
+        s.setData('dying', true)
+        this.tweens.add({ targets: s, alpha: 0, duration: 200, onComplete: () => { s.destroy(); this.sprites.delete(g.id) } })
+      }
+      return
+    }
+    const sprite = this.track(g.id, () => addSprite(this, GOOSE_KEY[g.size], g.x, g.y))
+    const hop = g.biting ? Math.abs(Math.sin(this.hooks.game.elapsed * 20)) * 4 : 0
+    sprite.setPosition(g.x, g.y - hop).setDepth(g.y)
+    if (sprite instanceof Phaser.GameObjects.Image) sprite.setFlipX(g.facingRight)
+  }
+
+  private drawBars() {
+    const { game } = this.hooks
+    const g = this.bars.clear()
+    const bar = (x: number, y: number, w: number, ratio: number, color: number) => {
+      g.fillStyle(0x000000, 0.7).fillRect(x - w / 2 - 2, y - 2, w + 4, 10)
+      g.fillStyle(color, 1).fillRect(x - w / 2, y, w * Math.max(0, ratio), 6)
+    }
+    bar(game.player.x, game.player.y - 72, 48, game.run.hp / game.run.hpMax, 0x5cd85c)
+    for (const n of game.nests) if (n.alive && n.hp < 13) bar(n.x, n.y - 70, 48, n.hp / 13, 0xd84c4c)
+  }
+
+  private renderEvent(e: GameEvent) {
+    if (e.type === 'float') {
+      const t = this.add.text(e.x, e.y, e.text, { fontSize: '22px', color: e.color, stroke: '#000', strokeThickness: 4 })
+        .setOrigin(0.5).setDepth(1e6)
+      this.tweens.add({ targets: t, y: e.y - 40, alpha: 0, duration: 800, onComplete: () => t.destroy() })
+    } else if (e.type === 'hit' && e.target !== 'player') {
+      const s = this.sprites.get(e.target.id)
+      if (s instanceof Phaser.GameObjects.Image) {
+        s.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL)
+        this.time.delayedCall(60, () => s.active && s.clearTint().setTintMode(Phaser.TintModes.MULTIPLY))
+      }
+    } else if (e.type === 'hit') {
+      this.cameras.main.shake(80, 0.004)
+    }
   }
 }
