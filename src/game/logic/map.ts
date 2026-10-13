@@ -94,7 +94,8 @@ export const padOf = (b: Building): Point => ({ x: b.x, y: b.y + b.h / 2 + 40 })
 
 export const spawnPoint = (map: GameMap): Point => {
   const stall = map.buildings.find((b) => b.id === 'stall') ?? map.buildings[0]
-  return { x: stall.x + 110, y: stall.y + 50 }
+  // Original: stall bottom + (110, 50); our building y is its centre.
+  return { x: stall.x + 110, y: stall.y + stall.h / 2 + 50 }
 }
 
 export const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y)

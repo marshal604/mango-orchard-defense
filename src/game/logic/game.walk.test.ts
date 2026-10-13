@@ -9,7 +9,7 @@ describe('walking the map', () => {
   it('starts the player at the spawn point next to the fruit stand', () => {
     const game = new Game({ difficulty: 'normal', seed: 1 })
     expect(game.player.x).toBe(2510)
-    expect(game.player.y).toBe(2400)
+    expect(game.player.y).toBe(2480)
   })
 
   it('moves the player at 270 px/s', () => {
@@ -21,7 +21,7 @@ describe('walking the map', () => {
   it('normalises diagonal input so diagonals are not faster', () => {
     const game = new Game({ difficulty: 'normal', seed: 1 })
     game.step(1, { move: { x: 1, y: 1 } })
-    const moved = Math.hypot(game.player.x - 2510, game.player.y - 2400)
+    const moved = Math.hypot(game.player.x - 2510, game.player.y - 2480)
     expect(moved).toBeCloseTo(270)
   })
 

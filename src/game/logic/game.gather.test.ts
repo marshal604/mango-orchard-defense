@@ -162,7 +162,7 @@ describe('health', () => {
     game.spawnMonkey({ x: LAKE.x + 10, y: LAKE.y }, 'small')
     run(game, 1)
     game.revive('restart')
-    expect(game.player).toMatchObject({ x: 2510, y: 2400 })
+    expect(game.player).toMatchObject({ x: 2510, y: 2480 })
     expect(game.run.money).toBe(0)
     expect(game.run.mango).toBe(0)
   })
