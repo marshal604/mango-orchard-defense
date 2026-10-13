@@ -11,6 +11,7 @@ import type { GameMap, Point, ZoneId } from './map'
 import { DEFAULT_MAP, dist, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
 import { MSG, pavilionNotice, TRAP_TEXT } from './messages'
 import { makeRng } from './rng'
+import { pushOutOfSolids } from './solids'
 import { attackRange, playerSpeed, toolOf, RunState } from './run'
 import { applyPeck, clearAilments, facingOf, freshStatus, tickBuffs, walk, type PeckEffects, type PlayerStatus } from './status'
 import { cashOut, damageWorker, makeWorker, updateWorker, type WorkerWorld } from './workers'
@@ -248,6 +249,7 @@ export class Game implements MonkeyWorld, WorkerWorld {
     const s = this.status
     const speed = playerSpeed(this.run.levels) * (s.sprainLeft > 0 ? s.sprainMult : 1) * (s.bellyacheLeft > 0 ? TRAPS.ice.speedMult : 1)
     s.moving = walk(this.player, move, speed, dt, this.map)
+    if (s.moving) pushOutOfSolids(this.player, this.trees, this.map.buildings)
     if (s.moving) s.facing = facingOf(move.x, move.y)
   }
 

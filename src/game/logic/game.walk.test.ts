@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Game } from './game'
 import { DEFAULT_MAP, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
+import { emptyMap } from './testMap'
 
 const idle = { move: { x: 0, y: 0 } }
 
@@ -56,5 +57,34 @@ describe('safe areas', () => {
   it('cover every building pad and the spawn point', () => {
     for (const b of DEFAULT_MAP.buildings) expect(inSafeArea(DEFAULT_MAP, padOf(b))).toBe(true)
     expect(inSafeArea(DEFAULT_MAP, spawnPoint(DEFAULT_MAP))).toBe(true)
+  })
+})
+
+describe('solid trunks and buildings', () => {
+  it('stops the player at a tree trunk instead of walking through it', () => {
+    const game = new Game({ difficulty: 'normal', seed: 1, map: emptyMap() })
+    game.setTool(-1)
+    game.teleport({ x: 1000, y: 600 })
+    game.spawnTree({ x: 1060, y: 600 }, false)
+    for (let i = 0; i < 20; i++) game.step(0.05, { move: { x: 1, y: 0 } })
+    expect(game.player.x).toBeLessThan(1060)
+  })
+
+  it('lets the player walk through once the tree has been harvested', () => {
+    const game = new Game({ difficulty: 'normal', seed: 1, map: emptyMap() })
+    game.setTool(-1)
+    game.teleport({ x: 1000, y: 600 })
+    const tree = game.spawnTree({ x: 1060, y: 600 }, false)
+    tree.alive = false
+    for (let i = 0; i < 20; i++) game.step(0.05, { move: { x: 1, y: 0 } })
+    expect(game.player.x).toBeGreaterThan(1100)
+  })
+
+  it('does not let the player walk into a building', () => {
+    const game = new Game({ difficulty: 'normal', seed: 1, map: emptyMap() })
+    const stall = game.map.buildings.find((b) => b.id === 'stall')!
+    game.teleport({ x: stall.x, y: stall.y + stall.h / 2 + 30 })
+    for (let i = 0; i < 20; i++) game.step(0.05, { move: { x: 0, y: -1 } })
+    expect(game.player.y).toBeGreaterThan(stall.y + stall.h / 2 - stall.h * 0.5)
   })
 })
