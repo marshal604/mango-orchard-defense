@@ -1,73 +1,42 @@
-import { useCallback, useState } from 'react'
-import { Game, type GameEvent } from './game/logic/game'
-import { BuildingMenu } from './ui/BuildingMenu'
-import { Dialog } from './ui/Dialog'
-import { GameView } from './ui/GameView'
-import { Hud } from './ui/Hud'
-import { Result } from './ui/Result'
-import { Toasts, type Toast } from './ui/Toasts'
+import { useState } from 'react'
+import type { Difficulty } from './game/logic/config'
+import { Board, HowTo, Setup, Title } from './ui/Menus'
+import { PlayScreen } from './ui/PlayScreen'
 
-type Notice = Extract<GameEvent, { type: 'notice' }>
+type ScreenId = 'title' | 'setup' | 'howto' | 'board' | 'play'
 
-let toastId = 0
+const PREFS_KEY = 'st_prefs'
+
+function loadPrefs(): { nickname: string; difficulty: Difficulty } {
+  try {
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as { nickname?: unknown; difficulty?: unknown }
+    return {
+      nickname: typeof p.nickname === 'string' ? p.nickname : '',
+      difficulty: p.difficulty === 'hell' ? 'hell' : 'normal',
+    }
+  } catch {
+    return { nickname: '', difficulty: 'normal' }
+  }
+}
 
 export default function App() {
-  const [game, setGame] = useState(() => new Game({ difficulty: 'normal', seed: Date.now() % 1e9 }))
-  const [won, setWon] = useState(false)
-  const [paused, setPaused] = useState(false)
-  const [dead, setDead] = useState(false)
-  const [notices, setNotices] = useState<Notice[]>([])
-  const [toasts, setToasts] = useState<Toast[]>([])
+  const [screen, setScreen] = useState<ScreenId>('title')
+  const [prefs, setPrefs] = useState(loadPrefs)
 
-  const handleEvents = useCallback((events: GameEvent[]) => {
-    if (events.some((e) => e.type === 'dead')) setDead(true)
-    if (events.some((e) => e.type === 'win')) setWon(true)
-    const newNotices = events.filter((e): e is Notice => e.type === 'notice')
-    if (newNotices.length) setNotices((n) => [...n, ...newNotices])
-    const newToasts = events.flatMap((e) => (e.type === 'toast' ? [{ id: ++toastId, text: e.text }] : []))
-    if (newToasts.length) setToasts((t) => [...t, ...newToasts].slice(-3))
-  }, [])
-
-  const expireToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), [])
-
-  const revive = (mode: 'keep' | 'restart') => {
-    game.revive(mode)
-    setDead(false)
+  const go = (nickname: string, difficulty: Difficulty) => {
+    const next = { nickname, difficulty }
+    localStorage.setItem(PREFS_KEY, JSON.stringify(next))
+    setPrefs(next)
+    setScreen('play')
   }
 
-  const restart = () => {
-    setGame(new Game({ difficulty: game.difficulty, seed: Date.now() % 1e9 }))
-    setWon(false)
-    setDead(false)
-    setNotices([])
-  }
-
-  const notice = notices[0]
   return (
     <main className="app">
-      <GameView game={game} paused={paused || !!notice} onEvents={handleEvents} />
-      <Hud game={game} onPause={() => setPaused(true)} />
-      <BuildingMenu game={game} />
-      <Toasts toasts={toasts} onExpire={expireToast} />
-      {notice && (
-        <Dialog title={notice.title} tone={notice.tone}>
-          {notice.lines.map((l) => <p key={l}>{l}</p>)}
-          <button type="button" className="btn btn-gold" onClick={() => setNotices((n) => n.slice(1))}>知道了</button>
-        </Dialog>
-      )}
-      {paused && (
-        <Dialog title="暫停">
-          <button type="button" className="btn btn-gold" onClick={() => setPaused(false)}>繼續</button>
-        </Dialog>
-      )}
-      {won && <Result game={game} onAgain={restart} onHome={restart} />}
-      {dead && (
-        <Dialog title="你倒下了">
-          <p>選擇復活方式</p>
-          <button type="button" className="btn btn-gold" onClick={() => revive('keep')}>原地復活（保留背包與錢）</button>
-          <button type="button" className="btn" onClick={() => revive('restart')}>回基地重來（背包與錢歸零）</button>
-        </Dialog>
-      )}
+      {screen === 'title' && <Title onStart={() => setScreen('setup')} onBoard={() => setScreen('board')} onHowTo={() => setScreen('howto')} />}
+      {screen === 'setup' && <Setup initial={prefs} onGo={go} onBack={() => setScreen('title')} />}
+      {screen === 'howto' && <HowTo onBack={() => setScreen('title')} />}
+      {screen === 'board' && <Board onBack={() => setScreen('title')} />}
+      {screen === 'play' && <PlayScreen nickname={prefs.nickname} difficulty={prefs.difficulty} onHome={() => setScreen('title')} />}
     </main>
   )
 }

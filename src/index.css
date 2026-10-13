@@ -120,3 +120,25 @@ body { touch-action: none; user-select: none; -webkit-user-select: none; }
 .toast { padding: 8px 12px; background: rgba(0, 0, 0, 0.8); border: 2px solid var(--gold); font-size: 14px; text-align: center; }
 .dialog-warn h2 { color: #ff7060; }
 .dialog .result-time { font-size: 40px; color: var(--gold); }
+
+.screen { position: absolute; inset: 0; overflow-y: auto; background: var(--night); }
+.screen-bg { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); height: 55%; image-rendering: pixelated; pointer-events: none; }
+.screen-body { position: relative; min-height: 100%; display: flex; flex-direction: column; align-items: center; padding: max(24px, env(safe-area-inset-top)) 18px 24px; }
+.logo { margin: 40px 0 6px; font-size: 54px; line-height: 1.05; text-align: center; color: var(--gold); text-shadow: 4px 4px 0 #000, -2px -2px 0 #000; }
+.tagline { margin: 0 0 24px; color: var(--white); text-shadow: 2px 2px 0 #000; }
+.menu { display: flex; flex-direction: column; gap: 12px; width: 220px; }
+.panel { width: 100%; display: flex; flex-direction: column; gap: 10px; padding: 16px; background: rgba(12, 12, 20, 0.92); border: 4px solid var(--white); }
+.panel h2 { margin: 0; color: var(--gold); text-align: center; }
+.panel small { color: var(--gray); line-height: 1.6; }
+.panel .row { display: flex; gap: 8px; }
+.panel .row > * { flex: 1; }
+.panel input { min-height: 48px; padding: 0 10px; font: inherit; font-size: 18px; color: var(--white); background: #000; border: 3px solid var(--white); }
+.steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.steps li { display: flex; gap: 10px; align-items: center; }
+.steps img { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; background: #1c1c1c; }
+.steps strong { display: block; color: var(--gold); }
+.board { margin: 0; padding: 0; list-style: none; }
+.board li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #444; }
+.countdown { position: absolute; inset: 0; z-index: 25; display: flex; align-items: center; justify-content: center; font-size: 120px; color: var(--gold); text-shadow: 6px 6px 0 #000; pointer-events: none; }
+.quest { position: absolute; top: 126px; left: 10px; max-width: 62%; padding: 6px 8px; background: rgba(0, 0, 0, 0.7); border: 2px solid var(--gold); font-size: 13px; line-height: 1.4; pointer-events: none; }
+.quest-title { color: var(--gold); font-size: 12px; }

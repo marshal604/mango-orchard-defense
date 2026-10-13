@@ -2,23 +2,26 @@ import { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
 import { WorldScene } from '../game/scene'
 import type { Game, GameEvent } from '../game/logic/game'
-import { zoneAt } from '../game/logic/map'
+import { zoneAt, type Point } from '../game/logic/map'
 
 interface Props {
   game: Game
   paused: boolean
   onEvents?: (events: GameEvent[]) => void
+  guideTarget?: () => Point | null
 }
 
-export function GameView({ game, paused, onEvents }: Props) {
+export function GameView({ game, paused, onEvents, guideTarget }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const pausedRef = useRef(paused)
   const onEventsRef = useRef(onEvents)
+  const guideRef = useRef(guideTarget)
   const [banner, setBanner] = useState<string | null>(null)
 
   useEffect(() => {
     pausedRef.current = paused
     onEventsRef.current = onEvents
+    guideRef.current = guideTarget
   })
 
   useEffect(() => {
@@ -46,8 +49,9 @@ export function GameView({ game, paused, onEvents }: Props) {
       game,
       onEvents: handleEvents,
       isPaused: () => pausedRef.current,
+      guideTarget: () => guideRef.current?.() ?? null,
     })
-    if (import.meta.env.DEV) (window as unknown as { __game?: Game }).__game = game
+    if (import.meta.env.DEV) window.__game = game
     return () => {
       window.clearTimeout(bannerTimer)
       phaser.destroy(true)

@@ -3,7 +3,7 @@ import { CustomerQueue } from './customers'
 import { PlayerInput } from './input'
 import type { Game, GameEvent } from './logic/game'
 import type { Goose, Worker } from './logic/entities'
-import { padOf, type ZoneId } from './logic/map'
+import { padOf, type Point, type ZoneId } from './logic/map'
 import { addSprite, preloadSprites, setTexture, type Sprite } from './sprites'
 
 const ZONE_STYLE: Record<ZoneId, { color: number; tile: string }> = {
@@ -19,6 +19,7 @@ export interface SceneHooks {
   game: Game
   onEvents: (events: GameEvent[]) => void
   isPaused: () => boolean
+  guideTarget: () => Point | null
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -32,6 +33,9 @@ export class WorldScene extends Phaser.Scene {
   private workerSprites = new Map<Worker, Sprite>()
   private runners: Sprite[] = []
   private trapLabel!: Phaser.GameObjects.Text
+  private arrow!: Phaser.GameObjects.Triangle
+  private guideCd = 0
+  private guide: Point | null = null
 
   constructor() {
     super('world')
@@ -69,6 +73,7 @@ export class WorldScene extends Phaser.Scene {
     if (stall) this.customers = new CustomerQueue(this, padOf(stall))
     this.player = addSprite(this, 'player', game.player.x, game.player.y)
     this.bars = this.add.graphics().setDepth(1e6)
+    this.arrow = this.add.triangle(0, 0, 0, -12, 24, 0, 0, 12, 0xf8b800).setStrokeStyle(3, 0x000000).setDepth(1e6)
 
     const cam = this.cameras.main
     cam.setBounds(0, 0, game.map.width, game.map.height)
@@ -84,6 +89,7 @@ export class WorldScene extends Phaser.Scene {
     this.syncPlayer()
     this.syncWorld()
     this.drawBars()
+    this.drawArrow(deltaMs)
     const events = game.drainEvents()
     for (const e of events) this.renderEvent(e)
     if (events.length) this.hooks.onEvents(events)
@@ -203,6 +209,22 @@ export class WorldScene extends Phaser.Scene {
     const hop = busy ? Math.abs(Math.sin(this.hooks.game.elapsed * 12)) * 3 : 0
     s.setPosition(w.x, w.y - hop).setDepth(w.y).setVisible(w.state !== 'down')
     if (s instanceof Phaser.GameObjects.Image && w.x !== prev) s.setFlipX(w.x < prev)
+  }
+
+  // Gold arrow orbiting the player toward the quest target; hidden when close.
+  private drawArrow(deltaMs: number) {
+    this.guideCd -= deltaMs
+    if (this.guideCd <= 0) {
+      this.guideCd = 250
+      this.guide = this.hooks.guideTarget()
+    }
+    const p = this.hooks.game.player
+    const t = this.guide
+    const d = t ? Math.hypot(t.x - p.x, t.y - p.y) : 0
+    this.arrow.setVisible(!!t && d > 220 && !this.hooks.game.trapped)
+    if (!t || d <= 220) return
+    const a = Math.atan2(t.y - p.y, t.x - p.x)
+    this.arrow.setPosition(p.x + Math.cos(a) * 56, p.y - 28 + Math.sin(a) * 56).setRotation(a)
   }
 
   private drawBars() {
