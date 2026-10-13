@@ -1,11 +1,11 @@
-import type { Difficulty, Resource } from './config'
-import { COMBAT, GOOSE, KING, NEST, PLAYER, TREE } from './config'
+import type { BuildingId, Difficulty, Resource, Track } from './config'
+import { BUILDING, COMBAT, GOOSE, KING, NEST, PLAYER, TREE } from './config'
 import type { Attacker, Goose, GooseSize, Nest, Pile, Target, Tree, Worker } from './entities'
 import { aggro, gooseStats, updateGoose, type GooseWorld } from './geese'
 import type { GameMap, Point, ZoneId } from './map'
-import { DEFAULT_MAP, dist, inSafeArea, spawnPoint, zoneAt } from './map'
+import { DEFAULT_MAP, dist, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
 import { makeRng } from './rng'
-import { attackRange, playerSpeed, racketOf, RunState } from './run'
+import { attackRange, playerSpeed, racketOf, RunState, sellInterval } from './run'
 import { makeGoose, makeTree, newId, populate } from './world'
 
 export interface Input { move: Point }
@@ -17,6 +17,9 @@ export type GameEvent =
   | { type: 'hit'; target: Target | 'player' }
   | { type: 'dead' }
   | { type: 'revive' }
+  | { type: 'sale'; kind: Resource }
+  | { type: 'bought'; track: Track; level: number }
+  | { type: 'buyFail'; track: Track }
 
 export interface GameOptions {
   difficulty: Difficulty
@@ -57,6 +60,7 @@ export class Game implements GooseWorld {
   }
   elapsed = 0
   zone: ZoneId
+  private sellCd = 0
   private noRacket = false
   private needRacketAt = -Infinity
   private events: GameEvent[] = []
@@ -100,6 +104,7 @@ export class Game implements GooseWorld {
     this.elapsed += dt
     this.updatePlayer(dt, input.move)
     for (const g of this.geese) updateGoose(this, g, dt)
+    this.updateStall(dt)
     this.trackZone()
   }
 
@@ -122,6 +127,20 @@ export class Game implements GooseWorld {
     }
     this.status.invulnerableUntil = this.elapsed + PLAYER.reviveInvulnerable
     this.emit({ type: 'revive' })
+  }
+
+  currentPad(): BuildingId | null {
+    if (this.run.dead) return null
+    return this.map.buildings.find((b) => dist(this.player, padOf(b)) <= BUILDING.padRadius)?.id ?? null
+  }
+
+  buy(track: Track): boolean {
+    if (!this.run.buy(track)) {
+      this.emit({ type: 'buyFail', track })
+      return false
+    }
+    this.emit({ type: 'bought', track, level: this.run.levels[track] })
+    return true
   }
 
   teleport(p: Point): void {
@@ -309,6 +328,22 @@ export class Game implements GooseWorld {
   protected destroyNest(n: Nest): void {
     this.run.stats.nests++
     n.respawnLeft = NEST.respawnSec
+  }
+
+  // --- economy ---
+  private updateStall(dt: number): void {
+    if (this.currentPad() !== 'stall') {
+      this.sellCd = 0
+      return
+    }
+    this.sellCd -= dt
+    while (this.sellCd <= 0 && this.run.bagUsed > 0) {
+      const kind = this.run.sellOne()
+      if (!kind) break
+      this.sellCd += sellInterval(this.run.levels)
+      this.emit({ type: 'sale', kind })
+    }
+    if (this.sellCd < 0) this.sellCd = 0
   }
 
   // --- loot ---

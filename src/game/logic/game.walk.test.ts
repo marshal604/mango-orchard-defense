@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Game } from './game'
-import { DEFAULT_MAP, zoneAt } from './map'
+import { DEFAULT_MAP, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
 
 const idle = { move: { x: 0, y: 0 } }
 
@@ -49,5 +49,12 @@ describe('walking the map', () => {
     const game = new Game({ difficulty: 'normal', seed: 1 })
     game.step(0.5, idle)
     expect(game.elapsed).toBeCloseTo(0.5)
+  })
+})
+
+describe('safe areas', () => {
+  it('cover every building pad and the spawn point', () => {
+    for (const b of DEFAULT_MAP.buildings) expect(inSafeArea(DEFAULT_MAP, padOf(b))).toBe(true)
+    expect(inSafeArea(DEFAULT_MAP, spawnPoint(DEFAULT_MAP))).toBe(true)
   })
 })

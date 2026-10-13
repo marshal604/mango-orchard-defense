@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Game, type GameEvent } from './game/logic/game'
+import { BuildingMenu } from './ui/BuildingMenu'
 import { Dialog } from './ui/Dialog'
 import { GameView } from './ui/GameView'
 import { Hud } from './ui/Hud'
@@ -22,6 +23,7 @@ export default function App() {
     <main className="app">
       <GameView game={game} paused={paused} onEvents={handleEvents} />
       <Hud game={game} onPause={() => setPaused(true)} />
+      <BuildingMenu game={game} />
       {paused && (
         <Dialog title="暫停">
           <button type="button" className="btn btn-gold" onClick={() => setPaused(false)}>繼續</button>

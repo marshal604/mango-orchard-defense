@@ -79,10 +79,10 @@ export function zoneAt(map: GameMap, p: Point): Zone {
     ?? map.zones[0]
 }
 
-// Area around each building where enemies cannot hurt the player.
+// Area around each building where enemies cannot hurt the player: from its middle to 110 px below it.
 export const safeArea = (b: Building): Rect => ({
   x: b.x - b.w / 2 - 50,
-  y: b.y - b.h / 2,
+  y: b.y,
   w: b.w + 100,
   h: b.h / 2 + 110,
 })

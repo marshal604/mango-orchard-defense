@@ -1,8 +1,9 @@
 import Phaser from 'phaser'
+import { CustomerQueue } from './customers'
 import { PlayerInput } from './input'
 import type { Game, GameEvent } from './logic/game'
 import type { Goose } from './logic/entities'
-import type { ZoneId } from './logic/map'
+import { padOf, type ZoneId } from './logic/map'
 import { addSprite, preloadSprites, setTexture, type Sprite } from './sprites'
 
 const ZONE_STYLE: Record<ZoneId, { color: number; tile: string }> = {
@@ -27,6 +28,7 @@ export class WorldScene extends Phaser.Scene {
   private bars!: Phaser.GameObjects.Graphics
   private sprites = new Map<number, Sprite>()
   private stumped = new Set<number>()
+  private customers: CustomerQueue | null = null
 
   constructor() {
     super('world')
@@ -46,10 +48,13 @@ export class WorldScene extends Phaser.Scene {
     for (const b of game.map.buildings) {
       const s = addSprite(this, b.id, b.x, b.y + b.h / 2).setDepth(b.y + b.h / 2)
       if (s instanceof Phaser.GameObjects.Image) s.setScale(Math.min(b.w / s.width, (b.h * 1.2) / s.height))
-      this.add.ellipse(b.x, b.y + b.h / 2 + 40, 60, 30, 0xf8b800, 0.35).setStrokeStyle(2, 0xf8b800).setDepth(1)
+      const pad = padOf(b)
+      this.add.ellipse(pad.x, pad.y, 60, 30, 0xf8b800, 0.35).setStrokeStyle(2, 0xf8b800).setDepth(1)
       this.add.text(b.x, b.y - b.h / 2 - 10, b.name, { fontSize: '20px', color: '#f8f8f8', stroke: '#000', strokeThickness: 4 })
         .setOrigin(0.5, 1).setDepth(1e6)
     }
+    const stall = game.map.buildings.find((b) => b.id === 'stall')
+    if (stall) this.customers = new CustomerQueue(this, padOf(stall))
     this.player = addSprite(this, 'player', game.player.x, game.player.y)
     this.bars = this.add.graphics().setDepth(1e6)
 
@@ -173,6 +178,8 @@ export class WorldScene extends Phaser.Scene {
         s.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL)
         this.time.delayedCall(60, () => s.active && s.clearTint().setTintMode(Phaser.TintModes.MULTIPLY))
       }
+    } else if (e.type === 'sale') {
+      this.customers?.sale(e.kind, this.hooks.game.player)
     } else if (e.type === 'hit') {
       this.cameras.main.shake(80, 0.004)
     }

@@ -1,5 +1,5 @@
 import type { Difficulty, Racket, Resource, Track } from './config'
-import { COMBAT, DIFFICULTY, ECONOMY, PLAYER, RACKETS } from './config'
+import { COMBAT, DIFFICULTY, ECONOMY, MILESTONES, PLAYER, RACKETS, UPGRADES } from './config'
 
 export type Levels = Record<Track, number>
 
@@ -15,6 +15,18 @@ export const bagCap = (levels: Levels, d: Difficulty) => DIFFICULTY[d].bagBase +
 export const hpMaxOf = (levels: Levels, d: Difficulty) => Math.round(DIFFICULTY[d].hpMax * (1 + levels.armor * ECONOMY.hpPerArmor))
 export const racketOf = (levels: Levels): Racket | undefined => RACKETS[levels.racket]
 export const attackRange = (levels: Levels) => COMBAT.ranges[levels.range]
+export const sellPrice = (kind: Resource, levels: Levels) =>
+  Math.round(ECONOMY.price[kind] * (1 + levels.price * ECONOMY.priceBoostPerLevel))
+export const sellInterval = (levels: Levels) => ECONOMY.sellIntervals[levels.window]
+export const maxLevel = (t: Track) => UPGRADES[t].prices.length
+
+// null = already at max level.
+export function upgradePrice(t: Track, level: number, d: Difficulty, perks: Perks): number | null {
+  const base = UPGRADES[t].prices[level]
+  if (base === undefined) return null
+  return Math.round(base * DIFFICULTY[d].priceMult * (perks.discount ? MILESTONES.discount : 1))
+}
+
 export const playerSpeed = (levels: Levels) => PLAYER.speed * (1 + levels.shoes * ECONOMY.speedPerShoes)
 
 // Economy and progression for one Run. No positions, no timers.
@@ -50,5 +62,36 @@ export class RunState {
   earn(amount: number) {
     this.money += amount
     this.stats.earned += amount
+  }
+
+  // Sells one item (feathers first); returns what was sold, or null when the bag is empty.
+  sellOne(): Resource | null {
+    const kind: Resource | null = this.feather > 0 ? 'feather' : this.cork > 0 ? 'cork' : null
+    if (!kind) return null
+    this[kind]--
+    this.earn(sellPrice(kind, this.levels))
+    return kind
+  }
+
+  sellAll(): number {
+    const total = this.cork * sellPrice('cork', this.levels) + this.feather * sellPrice('feather', this.levels)
+    this.cork = 0
+    this.feather = 0
+    this.earn(total)
+    return total
+  }
+
+  price(t: Track): number | null {
+    return upgradePrice(t, this.levels[t], this.difficulty, this.perks)
+  }
+
+  buy(t: Track): boolean {
+    const cost = this.price(t)
+    if (cost === null || this.money < cost) return false
+    const before = this.hpMax
+    this.money -= cost
+    this.levels = { ...this.levels, [t]: this.levels[t] + 1 }
+    if (t === 'armor') this.hp += this.hpMax - before
+    return true
   }
 }
