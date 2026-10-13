@@ -133,9 +133,9 @@ small: hp 3, wood 1. big: hp 10, wood 5. Loot = base x zone dropMult (rounded). 
 
 ## Hazards (observed)
 
-- Parasol: radius 44; rats cannot target a player under it; regen 10/s there.
-- Smoking booth: walking in locks the player 5 s, then 10 s of x1.5 speed... (`speedMult 1.5`, `drainPerSec 2`)
-  i.e. exits faster but loses 2 hp/s for 10 s (inferred from field names).
+- Parasol: radius 44; rats cannot target a player under it (drops aggro); regen 10/s there.
+  Entering costs ALL current cash as a donation until $2000 total donated, then free.
+- Smoking booth: walking in locks the player 5 s, then 10 s of x1.5 speed while losing 2 hp/s (observed in updatePlayer).
 - Hot spring / hotpot: radius 75, locks 5 s, then a 30 s ability that sets hit rats on fire (1 dps, 3 s).
 - Parade: a crowd walks back and forth along a road at speed 110 and pushes / blocks the player.
 - Grandma NPC at (3200, 2300): passes by 3 times with 5 s gaps (behaviour not fully read).
