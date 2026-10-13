@@ -1,4 +1,4 @@
-# 芒果園保衛戰 (shuttle-tycoon)
+# 芒果園保衛戰 (mango-orchard-defense)
 
 Orchard-vs-macaques remake (芒果園保衛戰) of a top-down gather/sell/upgrade/boss game. Mechanics reference:
 `docs/reverse-engineering.md`. Domain language: `CONTEXT.md`.

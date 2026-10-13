@@ -1,7 +1,7 @@
 # UI / UX reference: 蔣出來 stage 1「除鼠王」
 
 Study of https://whoismygrandpa.win/game (Next.js + Tailwind for menus/HUD, Phaser 3 for the world) to guide the
-look and feel of Shuttle Tycoon. Mechanics live in `docs/reverse-engineering.md`; this file is only about visuals,
+look and feel of 芒果園保衛戰. Mechanics live in `docs/reverse-engineering.md`; this file is only about visuals,
 layout, animation and screen flow.
 
 Legend:
@@ -300,7 +300,7 @@ result2 | ...`), no routing; everything lives at `/game`.
 
 ---
 
-## 5. Takeaways for Shuttle Tycoon [inf]
+## 5. Takeaways for 芒果園保衛戰 [inf]
 1. One small token set (7 colours, 0 radius, 3-4 px black borders, 2/4 px hard shadows) applied everywhere is most
    of the polish. Copy the `.game-btn` press-in (`translate(2px,2px)` + shadow 4 -> 2) and `.game-logo` stepped shadow.
 2. Use Cubic 11 (OFL) for both DOM and Phaser text and await `document.fonts.load` before creating the game.
