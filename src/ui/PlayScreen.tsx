@@ -16,7 +16,8 @@ import { Countdown, DeathCard, HoldCard, IntroCard, PauseCard, ResultCard, type 
 import { QuestPanel } from './QuestPanel'
 
 const TUTORIAL_KEY = 'st_tutorial_done'
-const SHEET_HEIGHT = 440
+// Minimap is 96 px wide with the map's aspect plus a 2 px border; it never changes height.
+const MINIMAP_HEIGHT = 68
 type Phase = 'intro' | 'countdown' | 'play' | 'won'
 
 interface Toast { id: number; text: string }
@@ -40,7 +41,6 @@ export function PlayScreen({ nickname, difficulty, onHome }: Props) {
   const [closedPad, setClosedPad] = useState<BuildingId | null>(null)
   const [result, setResult] = useState<{ rank: number; trophies: Trophy[] } | null>(null)
   const hudRef = useRef<HTMLDivElement>(null)
-  const sideRef = useRef<HTMLDivElement>(null)
   const sheetOpen = !!pad && pad !== 'stall' && pad !== closedPad
 
   const toast = useCallback((text: string) => {
@@ -106,11 +106,8 @@ export function PlayScreen({ nickname, difficulty, onHome }: Props) {
     return { at: view.target, label: view.targetName, hideWithin: view.toKing ? GUIDE.kingHideDist : GUIDE.arrowHideDist }
   }, [view])
 
-  const cover = useCallback(() => {
-    const hud = hudRef.current?.offsetHeight ?? 150
-    const side = sideRef.current?.offsetHeight ?? 0
-    return { top: hud + 10 + side + 6, bottom: sheetOpen ? SHEET_HEIGHT : 0 }
-  }, [sheetOpen])
+  // Only stable heights: toasts, quest changes and the menu sheet must never shift the camera.
+  const cover = useCallback(() => (hudRef.current?.offsetHeight ?? 150) + 10 + MINIMAP_HEIGHT + 6, [])
 
   const startRun = () => {
     unlockAudio()
@@ -138,7 +135,7 @@ export function PlayScreen({ nickname, difficulty, onHome }: Props) {
       <GameView game={game} paused={halted} onEvents={handleEvents} guide={guideTarget} cover={cover} />
       <Hud ref={hudRef} game={game} onPause={() => setPaused(true)} />
       <div className="under-hud" style={{ top: hudH + 10 }}>
-        <div className="side-col" ref={sideRef}>
+        <div className="side-col">
           {view.panel && <QuestPanel panel={view.panel} justCompleted={view.completed} />}
           {toasts.map((t) => <div key={t.id} className="toast pop">{t.text}</div>)}
         </div>

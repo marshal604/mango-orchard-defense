@@ -9,7 +9,7 @@ interface Props {
   paused: boolean
   onEvents: (events: GameEvent[]) => void
   guide: () => GuideTarget | null
-  cover: () => { top: number; bottom: number }
+  cover: () => number
 }
 
 // Mounts Phaser once per Game. Canvas is backed at devicePixelRatio (capped at 2) for crisp text and art.

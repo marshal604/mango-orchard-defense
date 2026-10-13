@@ -27,8 +27,8 @@ export interface SceneHooks {
   onEvents: (events: GameEvent[]) => void
   isPaused: () => boolean
   guide: () => GuideTarget | null
-  // CSS pixels covered by the HUD (top) and an open menu sheet (bottom).
-  cover: () => { top: number; bottom: number }
+  // CSS pixels covered at the top by the HUD; the player is centred in the area below it.
+  cover: () => number
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -109,14 +109,13 @@ export class WorldScene extends Phaser.Scene {
     const cam = this.cameras.main
     const dpr = dprOf()
     const zoom = dpr * viewZoom(this.scale.width / dpr, this.scale.height / dpr)
-    const { top, bottom } = this.hooks.cover()
+    const top = this.hooks.cover()
     cam.setZoom(zoom)
-    cam.setFollowOffset(0, ((top - bottom) / 2) * dpr / zoom)
-    // Stop at the map edge; extend by the HUD / sheet so the edge row is still visible below / above them.
+    cam.setFollowOffset(0, (top / 2) * dpr / zoom)
+    // Stop at the map edge; extend upward by the HUD so the top row is still visible below it.
     const { width, height } = this.hooks.game.map
     const topWorld = (top * dpr) / zoom
-    const bottomWorld = (bottom * dpr) / zoom
-    cam.setBounds(0, -topWorld, width, height + topWorld + bottomWorld)
+    cam.setBounds(0, -topWorld, width, height + topWorld)
   }
 
   private drawGround() {
