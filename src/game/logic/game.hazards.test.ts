@@ -105,3 +105,33 @@ describe('procession passage', () => {
     expect(freed).toBe(true)
   })
 })
+
+describe('fighting from a temple pavilion', () => {
+  it('keeps attacking monkeys in range while regenerating', () => {
+    const game = withMap({ pavilions: [SPOT] })
+    game.teleport(SPOT)
+    game.step(0.05, idle)
+    const monkey = game.spawnMonkey({ x: SPOT.x + 40, y: SPOT.y }, 'small')
+    run(game, 2)
+    expect(monkey.alive).toBe(false)
+  })
+
+  it('explains the donation with a toast instead of a card that pauses the run', () => {
+    const game = withMap({ pavilions: [SPOT] })
+    game.run.money = 300
+    game.teleport(SPOT)
+    game.step(0.05, idle)
+    const events = game.drainEvents()
+    expect(events.some((e) => e.type === 'notice')).toBe(false)
+    expect(events.some((e) => e.type === 'toast' && e.text.includes('$300'))).toBe(true)
+  })
+
+  it('keeps chopping trees in range while regenerating', () => {
+    const game = withMap({ pavilions: [SPOT] })
+    game.teleport(SPOT)
+    game.step(0.05, idle)
+    const tree = game.spawnTree({ x: SPOT.x + 30, y: SPOT.y }, false)
+    run(game, 2)
+    expect(tree.alive).toBe(false)
+  })
+})

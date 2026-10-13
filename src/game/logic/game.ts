@@ -9,7 +9,7 @@ import { spicyTick, makeHazards, moveProcession, stepPavilion, stepProcession, s
 import { newPile, nonEmpty, takeFromPile, workerStash } from './loot'
 import type { GameMap, Point, ZoneId } from './map'
 import { DEFAULT_MAP, dist, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
-import { MSG, pavilionNotice, TRAP_TEXT } from './messages'
+import { MSG, pavilionToast, TRAP_TEXT } from './messages'
 import { makeRng } from './rng'
 import { pushOutOfSolids } from './solids'
 import { attackRange, playerSpeed, toolOf, RunState } from './run'
@@ -309,7 +309,7 @@ export class Game implements MonkeyWorld, WorkerWorld {
     forget(this.monkeys, 'player')
     if (fee === 0 && this.hazards.donated >= PAVILION.freeAfter) return
     this.run.money -= fee
-    this.emit(pavilionNotice(fee, this.hazards.donated))
+    this.emit({ type: 'toast', text: pavilionToast(fee, this.hazards.donated) })
   }
 
   // --- combat ---

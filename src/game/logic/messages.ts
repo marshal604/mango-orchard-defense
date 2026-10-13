@@ -35,14 +35,9 @@ export const MSG = {
   workerDown: (w: Worker) => `${WORKER_NAME[w.kind]}被猴子打倒了，${WORKER.respawnDelay} 秒後在農會復活`,
 }
 
-export const pavilionNotice = (fee: number, donated: number): Notice => ({
-  type: 'notice', tone: 'info', title: '廟口涼亭',
-  lines: [
-    '涼亭是廟方蓋的，進來要投香油錢（身上現金全部）',
-    `（投了 $${fee}，累積 $${donated}／$${PAVILION.freeAfter}，滿額後免費）`,
-    `在涼亭下每秒回 ${PAVILION.regenPerSec} 滴血、猴子不敢靠近`,
-  ],
-})
+// A toast, not a blocking card: players dip into the pavilion mid-fight and must keep swinging.
+export const pavilionToast = (fee: number, donated: number): string =>
+  `廟口涼亭：投了 $${fee} 香油錢（累積 $${donated}／$${PAVILION.freeAfter}，滿額後免費）・每秒回 ${PAVILION.regenPerSec} 滴血、猴子不敢靠近`
 
 export const discountNotice: Notice = {
   type: 'notice', tone: 'info', title: '驅猴有功',

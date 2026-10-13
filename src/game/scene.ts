@@ -42,6 +42,7 @@ export class WorldScene extends Phaser.Scene {
   private trapLabel!: Phaser.GameObjects.Text
   private customers: CustomerQueue | null = null
   private runners: Sprite[] = []
+  private pavilions: Sprite[] = []
   private guide: GuideTarget | null = null
   private guideCd = 0
   private saleSum = 0
@@ -64,7 +65,7 @@ export class WorldScene extends Phaser.Scene {
     createAnims(this)
     this.drawGround()
     this.drawBuildings()
-    for (const p of game.map.pavilions) addSprite(this, 'pavilion', p.x, p.y + 30).setDepth(p.y + 30)
+    this.pavilions = game.map.pavilions.map((p) => addSprite(this, 'pavilion', p.x, p.y + 30).setDepth(p.y + 30))
     for (const p of game.map.iceShops) addSprite(this, 'ice_shop', p.x, p.y + 35).setDepth(p.y + 35)
     for (const p of game.map.chiliFields) addSprite(this, 'chili_field', p.x, p.y + 30).setDepth(p.y + 30)
     if (game.procession) {
@@ -93,6 +94,7 @@ export class WorldScene extends Phaser.Scene {
     this.player.sync(game)
     this.views.sync(game)
     this.syncProcession()
+    this.syncPavilions()
     this.syncTrapLabel()
     this.drawBars()
     this.drawArrow(deltaMs)
@@ -162,6 +164,15 @@ export class WorldScene extends Phaser.Scene {
       const x = m.head.x - dir.x * back - dir.y * side
       const y = m.head.y - dir.y * back + dir.x * side - Math.abs(Math.sin(t * 10 + i)) * 3
       r.setPosition(x, y).setDepth(y).setFlipX(dir.x < 0)
+    })
+  }
+
+  // The farmer stands under the roof: fade the pavilion so they stay visible while fighting from it.
+  private syncPavilions() {
+    const { game } = this.hooks
+    game.map.pavilions.forEach((p, i) => {
+      const near = Math.hypot(game.player.x - p.x, game.player.y - p.y) < 60
+      this.pavilions[i]?.setAlpha(near ? 0.45 : 1)
     })
   }
 
