@@ -1,67 +1,66 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
-import { WorldScene } from '../game/scene'
+import { dprOf, WorldScene, type GuideTarget } from '../game/scene'
 import type { Game, GameEvent } from '../game/logic/game'
-import { zoneAt, type Point } from '../game/logic/map'
 
 interface Props {
   game: Game
   paused: boolean
-  onEvents?: (events: GameEvent[]) => void
-  guideTarget?: () => Point | null
+  onEvents: (events: GameEvent[]) => void
+  guide: () => GuideTarget | null
+  cover: () => { top: number; bottom: number }
 }
 
-export function GameView({ game, paused, onEvents, guideTarget }: Props) {
+// Mounts Phaser once per Game. Canvas is backed at devicePixelRatio (capped at 2) for crisp text and art.
+export function GameView({ game, paused, onEvents, guide, cover }: Props) {
   const host = useRef<HTMLDivElement>(null)
-  const pausedRef = useRef(paused)
-  const onEventsRef = useRef(onEvents)
-  const guideRef = useRef(guideTarget)
-  const [banner, setBanner] = useState<string | null>(null)
+  const latest = useRef({ paused, onEvents, guide, cover })
 
   useEffect(() => {
-    pausedRef.current = paused
-    onEventsRef.current = onEvents
-    guideRef.current = guideTarget
+    latest.current = { paused, onEvents, guide, cover }
   })
 
   useEffect(() => {
-    if (!host.current) return
-    let bannerTimer = 0
-    const handleEvents = (events: GameEvent[]) => {
-      for (const e of events) {
-        if (e.type !== 'zone') continue
-        const z = game.map.zones.find((zone) => zone.id === e.zone) ?? zoneAt(game.map, game.player)
-        setBanner(`${z.name}　危險度 ${z.stars}`)
-        window.clearTimeout(bannerTimer)
-        bannerTimer = window.setTimeout(() => setBanner(null), 1500)
-      }
-      onEventsRef.current?.(events)
+    const el = host.current
+    if (!el) return
+    let phaser: Phaser.Game | null = null
+    let cancelled = false
+    const size = () => ({ w: el.clientWidth * dprOf(), h: el.clientHeight * dprOf() })
+    const onResize = () => {
+      if (!phaser) return
+      const { w, h } = size()
+      phaser.scale.resize(w, h)
+      phaser.scale.setZoom(1 / dprOf())
     }
-    const phaser = new Phaser.Game({
-      type: Phaser.AUTO,
-      parent: host.current,
-      backgroundColor: '#01215b',
-      scale: { mode: Phaser.Scale.RESIZE, width: host.current.clientWidth, height: host.current.clientHeight },
-      pixelArt: true,
-      scene: [],
-    })
-    phaser.scene.add('world', WorldScene, true, {
-      game,
-      onEvents: handleEvents,
-      isPaused: () => pausedRef.current,
-      guideTarget: () => guideRef.current?.() ?? null,
+    // Canvas text must never render in the fallback font, so wait for Cubic 11 first.
+    void document.fonts.load('16px "Cubic 11"').catch(() => undefined).then(() => {
+      if (cancelled) return
+      const { w, h } = size()
+      phaser = new Phaser.Game({
+        type: Phaser.AUTO,
+        parent: el,
+        backgroundColor: '#01215b',
+        antialias: true,
+        scale: { mode: Phaser.Scale.NONE, width: w, height: h, zoom: 1 / dprOf() },
+        scene: [],
+      })
+      phaser.scene.add('world', WorldScene, true, {
+        game,
+        onEvents: (events: GameEvent[]) => latest.current.onEvents(events),
+        isPaused: () => latest.current.paused,
+        guide: () => latest.current.guide(),
+        cover: () => latest.current.cover(),
+      })
+      window.addEventListener('resize', onResize)
     })
     if (import.meta.env.DEV) window.__game = game
+    if (import.meta.env.DEV) (window as unknown as { __phaser?: () => Phaser.Game | null }).__phaser = () => phaser
     return () => {
-      window.clearTimeout(bannerTimer)
-      phaser.destroy(true)
+      cancelled = true
+      window.removeEventListener('resize', onResize)
+      phaser?.destroy(true)
     }
   }, [game])
 
-  return (
-    <div className="game-view">
-      <div ref={host} className="game-canvas" />
-      {banner && <div className="zone-banner" role="status">{banner}</div>}
-    </div>
-  )
+  return <div ref={host} className="game-canvas" />
 }

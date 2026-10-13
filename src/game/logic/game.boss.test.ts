@@ -90,3 +90,19 @@ describe('the Monkey King', () => {
     expect(game.elapsed).toBe(t)
   })
 })
+
+describe('the Monkey King noticing you', () => {
+  it('warns once when the King starts chasing', () => {
+    const game = newGame()
+    game.setTool(-1)
+    game.drainEvents()
+    game.teleport({ x: game.king.x + 150, y: game.king.y })
+    run(game, 0.2)
+    game.teleport({ x: 2400, y: 600 })
+    run(game, 15)
+    game.teleport({ x: game.king.x + 150, y: game.king.y })
+    run(game, 0.2)
+    const toasts = game.drainEvents().filter((e) => e.type === 'toast' && e.text.includes('猴王發現你'))
+    expect(toasts).toHaveLength(1)
+  })
+})

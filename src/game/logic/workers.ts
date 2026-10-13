@@ -1,4 +1,4 @@
-import { MILESTONES, WORKER } from './config'
+import { COMBAT, MILESTONES, WORKER } from './config'
 import type { Monkey, Pile, Tree, Worker } from './entities'
 import { monkeyStats } from './monkeys'
 import type { Point } from './map'
@@ -30,7 +30,7 @@ export const workerInterval = (levels: Levels, perks: Perks) =>
 export function makeWorker(kind: Worker['kind'], at: Point): Worker {
   return {
     kind, x: at.x, y: at.y, hp: WORKER.hp, state: 'idle', target: null,
-    mango: 0, banana: 0, cd: 0, downLeft: 0, idleTo: null,
+    mango: 0, banana: 0, cd: 0, hitPending: false, downLeft: 0, idleTo: null,
   }
 }
 
@@ -52,6 +52,7 @@ function moveTo(w: Worker, p: Point, dt: number): boolean {
 function release(w: Worker) {
   if (w.target) w.target.lockedBy = null
   w.target = null
+  w.hitPending = false
 }
 
 function findTarget(world: WorkerWorld, w: Worker): Tree | Monkey | null {
@@ -84,10 +85,17 @@ function work(world: WorkerWorld, w: Worker, dt: number) {
     moveTo(w, t, dt)
     return
   }
+  // Same rhythm as the player: start a swing when ready, land it halfway through.
+  const interval = workerInterval(world.levels, world.perks)
   w.cd -= dt
-  if (w.cd > 0) return
-  w.cd = workerInterval(world.levels, world.perks)
-  world.hit(t, WORKER.damage, w)
+  if (w.cd <= 0) {
+    w.cd = interval
+    w.hitPending = true
+  }
+  if (w.hitPending && w.cd <= interval * (1 - COMBAT.impactAt)) {
+    w.hitPending = false
+    world.hit(t, WORKER.damage, w)
+  }
 }
 
 export function updateWorker(world: WorkerWorld, w: Worker, dt: number) {

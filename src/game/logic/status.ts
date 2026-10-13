@@ -12,13 +12,15 @@ export interface PlayerStatus {
   lastHurt: number
   attackCd: number
   swingUntil: number
+  swingDuration: number
+  swingFacesLeft: boolean
   facing: 'down' | 'up' | 'left' | 'right'
   moving: boolean
 }
 
 export const freshStatus = (): PlayerStatus => ({
   scratchLeft: 0, scratchDps: 0, sprainLeft: 0, sprainMult: 1, hasteLeft: 0, chiliLeft: 0, bellyacheLeft: 0,
-  invulnerableUntil: 0, lastHurt: 0, attackCd: 0, swingUntil: 0, facing: 'down', moving: false,
+  invulnerableUntil: 0, lastHurt: 0, attackCd: 0, swingUntil: 0, swingDuration: 0, swingFacesLeft: false, facing: 'down', moving: false,
 })
 
 export function tickBuffs(s: PlayerStatus, dt: number): void {

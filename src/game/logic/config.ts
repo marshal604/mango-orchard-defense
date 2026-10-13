@@ -62,6 +62,8 @@ export const TOOLS: readonly Tool[] = [
 export const COMBAT = {
   ranges: [48, 64, 80],
   needToolHintEvery: 2,
+  impactAt: 0.5,
+  pileMergeRadius: 24,
 } as const
 
 export const MONKEY = {
@@ -145,7 +147,7 @@ export const TRAPS = {
   chili: { lockSec: 5, radius: 75, abilitySec: 30, spicy: { dps: 1, sec: 3 } },
 } as const
 
-export const PROCESSION = { speed: 110, length: 26 * 30, width: 60, pushGain: 12 } as const
+export const PROCESSION = { speed: 110, length: 26 * 30, width: 60, blockSec: 5, passSec: 3 } as const
 
 export type Track =
   | 'bag' | 'price' | 'window' | 'delivery'
@@ -177,3 +179,5 @@ export const SUGGEST_ORDER: readonly Track[] = [
   'tool', 'armor', 'bag', 'picker', 'ranger', 'price',
   'range', 'shoes', 'window', 'workerTool', 'cart', 'delivery',
 ]
+
+export const VIEW = { maxPixelRatio: 2, zoom: 0.7 } as const

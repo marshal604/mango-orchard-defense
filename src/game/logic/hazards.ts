@@ -20,6 +20,8 @@ export interface HazardState {
   trapped: Trap | null
   armed: boolean
   inPavilion: boolean
+  blockedFor: number
+  passLeft: number
   donated: number
   procession: Procession | null
 }
@@ -48,7 +50,7 @@ export function makeHazards(map: GameMap): HazardState {
   const procession: Procession | null = path.length >= 2
     ? { path, total, s: PROCESSION.length, dir: 1, head: pointAt(path, PROCESSION.length) }
     : null
-  return { trapped: null, armed: true, inPavilion: false, donated: 0, procession }
+  return { trapped: null, armed: true, inPavilion: false, donated: 0, blockedFor: 0, passLeft: 0, procession }
 }
 
 export const underPavilion = (map: GameMap, p: Point) => map.pavilions.some((s) => dist(p, s) <= PAVILION.radius)
@@ -133,4 +135,27 @@ export function stepPavilion(h: HazardState, map: GameMap, p: Point, money: numb
   const fee = h.donated >= PAVILION.freeAfter ? 0 : money
   h.donated += fee
   return fee
+}
+
+// Blocks the player against the procession; after blockSec of contact they get passSec to slip through.
+// Returns the pushed-out position, or null when the player is free. `firstBlock` is true on the first contact of a stretch.
+export function stepProcession(h: HazardState, p: Point, dt: number): { to: Point | null; firstBlock: boolean } {
+  const m = h.procession
+  if (!m) return { to: null, firstBlock: false }
+  if (h.passLeft > 0) {
+    h.passLeft -= dt
+    return { to: null, firstBlock: false }
+  }
+  const to = pushOutOfProcession(m, p)
+  if (!to) {
+    h.blockedFor = 0
+    return { to: null, firstBlock: false }
+  }
+  const firstBlock = h.blockedFor === 0
+  h.blockedFor += dt
+  if (h.blockedFor >= PROCESSION.blockSec) {
+    h.blockedFor = 0
+    h.passLeft = PROCESSION.passSec
+  }
+  return { to, firstBlock }
 }

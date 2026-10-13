@@ -10,7 +10,8 @@ export type GameEvent =
   | { type: 'zone'; zone: ZoneId }
   | { type: 'toast'; text: string }
   | { type: 'float'; x: number; y: number; text: string; color: string }
-  | { type: 'hit'; target: Target | 'player' }
+  | { type: 'hit'; target: Target; byPlayer: boolean; lethal: boolean }
+  | { type: 'hurt' }
   | { type: 'dead' }
   | { type: 'revive' }
   | { type: 'sale'; kind: Resource }

@@ -1,6 +1,6 @@
 import type { Worker } from './entities'
 import type { Notice } from './events'
-import { DEN, MILESTONES, PAVILION, TRAPS, WORKER } from './config'
+import { DEN, MILESTONES, PAVILION, PROCESSION, TRAPS, WORKER } from './config'
 
 // Every player-facing line the headless game emits lives here, built from config numbers.
 
@@ -28,6 +28,8 @@ export const MSG = {
   needShears: '搆不到',
   needShearsToast: '老欉芒果樹太高了，要高枝剪才搆得到：到農具行升級採果工具',
   kingDown: '打倒猴王！',
+  kingNoticed: '猴王發現你了！被抓到會流血、還會扭到腳',
+  processionBlocked: `被進香團擋住了！擠 ${PROCESSION.blockSec} 秒就能鑽過去`,
   denDown: `拆掉猴群據點 +$${DEN.reward}　手腳俐落 攻速 x${DEN.haste.mult}`,
   delivery: (amount: number) => `宅配收走 +$${amount}`,
   workerDown: (w: Worker) => `${WORKER_NAME[w.kind]}被猴子打倒了，${WORKER.respawnDelay} 秒後在農會復活`,

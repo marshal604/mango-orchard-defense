@@ -46,7 +46,7 @@ describe('gathering', () => {
     game.teleport(LAKE)
     const tree = game.spawnTree({ x: LAKE.x - 20, y: LAKE.y }, false)
     const monkey = game.spawnMonkey({ x: LAKE.x + 40, y: LAKE.y }, 'small')
-    game.step(0.05, idle)
+    run(game, 0.3)
     expect(monkey.hp).toBeLessThan(4)
     expect(tree.hp).toBe(3)
   })
@@ -165,5 +165,29 @@ describe('health', () => {
     expect(game.player).toMatchObject({ x: 2510, y: 2400 })
     expect(game.run.money).toBe(0)
     expect(game.run.mango).toBe(0)
+  })
+})
+
+describe('swing timing', () => {
+  it('lands the hit halfway through the swing, not when it starts', () => {
+    const game = newGame()
+    game.teleport(LAKE)
+    const tree = game.spawnTree({ x: LAKE.x + 30, y: LAKE.y }, false)
+    game.step(0.01, idle)
+    expect(tree.hp).toBe(3)
+    expect(game.status.swingUntil).toBeGreaterThan(game.elapsed)
+    run(game, 0.25)
+    expect(tree.hp).toBe(1.5)
+  })
+
+  it('merges loot that falls within 24 px of an existing pile', () => {
+    const game = newGame()
+    game.teleport(LAKE)
+    game.run.mango = 30
+    game.spawnTree({ x: LAKE.x + 30, y: LAKE.y }, false)
+    game.spawnTree({ x: LAKE.x + 40, y: LAKE.y + 5 }, false)
+    run(game, 4)
+    expect(game.piles).toHaveLength(1)
+    expect(game.piles[0].mango).toBe(4)
   })
 })

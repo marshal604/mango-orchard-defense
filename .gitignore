@@ -26,3 +26,6 @@ dist-ssr
 # test output
 test-results
 playwright-report
+
+# codex art working files
+public/assets/.processing

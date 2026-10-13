@@ -12,6 +12,7 @@ export interface Worker {
   mango: number
   banana: number
   cd: number
+  hitPending: boolean
   downLeft: number
   idleTo: Point | null
 }

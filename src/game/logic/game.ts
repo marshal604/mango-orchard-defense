@@ -5,7 +5,7 @@ import { reachMilestones, sellAtStall, tickDelivery, type EconomyClock } from '.
 import type { Attacker, Monkey, MonkeySize, Den, Pile, Target, Tree, Worker } from './entities'
 import { GOLD, type GameEvent, type Input } from './events'
 import { aggro, forget, updateMonkey, type MonkeyWorld } from './monkeys'
-import { spicyTick, makeHazards, moveProcession, pushOutOfProcession, stepPavilion, stepTrap, type HazardState } from './hazards'
+import { spicyTick, makeHazards, moveProcession, stepPavilion, stepProcession, stepTrap, type HazardState } from './hazards'
 import { newPile, nonEmpty, takeFromPile, workerStash } from './loot'
 import type { GameMap, Point, ZoneId } from './map'
 import { DEFAULT_MAP, dist, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
@@ -48,8 +48,11 @@ export class Game implements MonkeyWorld, WorkerWorld {
   elapsed = 0
   finished = false
   zone: ZoneId
+  readonly visitedZones = new Set<ZoneId>()
   private clock: EconomyClock = { sellCd: 0, deliveryCd: 0 }
   private noTool = false
+  private pendingHit: { target: Target; at: number; damage: number } | null = null
+  private kingNoticed = false
   private needToolAt = -Infinity
   private events: GameEvent[] = []
 
@@ -60,6 +63,7 @@ export class Game implements MonkeyWorld, WorkerWorld {
     this.run = new RunState(opts.difficulty)
     this.player = spawnPoint(this.map)
     this.zone = zoneAt(this.map, this.player).id
+    this.visitedZones.add(this.zone)
     const world = populate(this.map, this.rng, opts.difficulty)
     this.trees = world.trees
     this.monkeys = world.monkeys
@@ -120,6 +124,10 @@ export class Game implements MonkeyWorld, WorkerWorld {
     for (const g of this.monkeys) if (g.spicyLeft > 0) this.hit(g, spicyTick(g, dt), 'player')
     if (this.hazards.procession) moveProcession(this.hazards.procession, dt)
     this.updateEconomy(dt)
+    if (!this.kingNoticed && this.king.target === 'player') {
+      this.kingNoticed = true
+      this.emit({ type: 'toast', text: MSG.kingNoticed })
+    }
     this.trackZone()
   }
 
@@ -185,7 +193,7 @@ export class Game implements MonkeyWorld, WorkerWorld {
   hit(target: Target, damage: number, by: Attacker): void {
     if (!target.alive) return
     target.hp -= damage
-    this.emit({ type: 'hit', target })
+    this.emit({ type: 'hit', target, byPlayer: by === 'player', lethal: target.hp <= 0 })
     if (target.hp > 0) {
       if (target.kind !== 'monkey') return
       aggro(target, by)
@@ -218,10 +226,11 @@ export class Game implements MonkeyWorld, WorkerWorld {
     }
     this.updatePavilion()
     this.movePlayer(dt, move)
-    const m = this.hazards.procession
-    const pushed = m && pushOutOfProcession(m, this.player)
-    if (pushed) this.teleport(pushed)
+    const blocked = stepProcession(this.hazards, this.player, dt)
+    if (blocked.to) this.teleport(blocked.to)
+    if (blocked.firstBlock) this.emit({ type: 'toast', text: MSG.processionBlocked })
     this.attack(dt)
+    this.landPendingHit()
     this.collectPiles()
     this.regen(dt)
   }
@@ -256,7 +265,7 @@ export class Game implements MonkeyWorld, WorkerWorld {
     if (this.run.dead || this.hazards.trapped || this.elapsed < this.status.invulnerableUntil) return false
     this.run.hp -= dmg
     this.status.lastHurt = this.elapsed
-    this.emit({ type: 'hit', target: 'player' })
+    this.emit({ type: 'hurt' })
     if (this.run.hp <= 0) this.die()
     return true
   }
@@ -267,6 +276,7 @@ export class Game implements MonkeyWorld, WorkerWorld {
     run.dead = true
     run.stats.deaths++
     clearAilments(this.status)
+    this.pendingHit = null
     this.hazards.trapped = null
     forget(this.monkeys, 'player')
     this.emit({ type: 'dead' })
@@ -315,7 +325,17 @@ export class Game implements MonkeyWorld, WorkerWorld {
     if (!target) return
     s.attackCd = tool.interval / (s.hasteLeft > 0 ? DEN.haste.mult : 1)
     s.swingUntil = this.elapsed + s.attackCd
-    this.hit(target, tool.damage, 'player')
+    s.swingDuration = s.attackCd
+    s.swingFacesLeft = target.x < this.player.x
+    this.pendingHit = { target, at: this.elapsed + s.attackCd * COMBAT.impactAt, damage: tool.damage }
+  }
+
+  // The swing connects halfway through; the target may have died or walked off meanwhile.
+  private landPendingHit(): void {
+    const p = this.pendingHit
+    if (!p || this.elapsed < p.at) return
+    this.pendingHit = null
+    this.hit(p.target, p.damage, 'player')
   }
 
   private fellTree(t: Tree, by: Attacker): void {
@@ -377,7 +397,13 @@ export class Game implements MonkeyWorld, WorkerWorld {
     if (by === 'player' && amount - left > 0) {
       this.emit({ type: 'float', x: at.x, y: at.y - 40, text: `+${amount - left}`, color: '#f8f8f8' })
     }
-    if (left > 0) this.piles = [...this.piles, newPile(kind, left, at)]
+    if (left > 0) this.dropPile(kind, left, at)
+  }
+
+  private dropPile(kind: Resource, amount: number, at: Point): void {
+    const near = this.piles.find((p) => dist(p, at) <= COMBAT.pileMergeRadius)
+    if (near) near[kind] += amount
+    else this.piles = [...this.piles, newPile(kind, amount, at)]
   }
 
   private collectPiles(): void {
@@ -397,6 +423,7 @@ export class Game implements MonkeyWorld, WorkerWorld {
     const id = zoneAt(this.map, this.player).id
     if (id === this.zone) return
     this.zone = id
+    this.visitedZones.add(id)
     this.emit({ type: 'zone', zone: id })
   }
 }

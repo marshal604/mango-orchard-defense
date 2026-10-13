@@ -39,7 +39,7 @@ export class RunState {
   hp: number
   dead = false
   perks: Perks = { discount: false, overwork: false }
-  stats = { trees: 0, monkeys: 0, dens: 0, earned: 0, deaths: 0 }
+  stats = { trees: 0, monkeys: 0, dens: 0, earned: 0, deaths: 0, sold: 0 }
 
   constructor(difficulty: Difficulty) {
     this.difficulty = difficulty
@@ -69,12 +69,14 @@ export class RunState {
     const kind: Resource | null = this.banana > 0 ? 'banana' : this.mango > 0 ? 'mango' : null
     if (!kind) return null
     this[kind]--
+    this.stats.sold++
     this.earn(sellPrice(kind, this.levels))
     return kind
   }
 
   sellAll(): number {
     const total = this.mango * sellPrice('mango', this.levels) + this.banana * sellPrice('banana', this.levels)
+    this.stats.sold += this.mango + this.banana
     this.mango = 0
     this.banana = 0
     this.earn(total)

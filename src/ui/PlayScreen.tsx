@@ -1,107 +1,155 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { Difficulty } from '../game/logic/config'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { BuildingId, Difficulty } from '../game/logic/config'
+import type { Notice } from '../game/logic/events'
 import { Game, type GameEvent } from '../game/logic/game'
+import { sfx, startBgm, stopBgm, unlockAudio } from '../game/sfx'
+import type { GuideTarget } from '../game/scene'
+import { Guide, type GuideView } from '../meta/guide'
 import { addRecord } from '../meta/leaderboard'
-import { nextGoal } from '../meta/quest'
+import { TrophyTracker, type Trophy } from '../meta/trophies'
 import { BuildingMenu } from './BuildingMenu'
-import { Dialog } from './Dialog'
 import { GameView } from './GameView'
 import { Hud } from './Hud'
+import { Minimap } from './Minimap'
+import { Countdown, DeathCard, HoldCard, IntroCard, PauseCard, ResultCard, type Hold } from './Overlays'
 import { QuestPanel } from './QuestPanel'
-import { Result } from './Result'
-import { Toasts, type Toast } from './Toasts'
 
-type Notice = Extract<GameEvent, { type: 'notice' }>
+const TUTORIAL_KEY = 'st_tutorial_done'
+const SHEET_HEIGHT = 440
+type Phase = 'intro' | 'countdown' | 'play' | 'won'
 
-const REVIVE_WAIT = 10
-let toastId = 0
+interface Toast { id: number; text: string }
+interface Banner { id: number; danger: boolean; stars: string; mult: number }
+let uid = 0
 
 interface Props { nickname: string; difficulty: Difficulty; onHome: () => void }
 
 export function PlayScreen({ nickname, difficulty, onHome }: Props) {
   const [game, setGame] = useState(() => new Game({ difficulty, seed: Date.now() % 1e9 }))
-  const [countdown, setCountdown] = useState(3)
+  const guide = useMemo(() => new Guide(localStorage.getItem(TUTORIAL_KEY) !== '1'), [game])
+  const trophies = useMemo(() => new TrophyTracker(localStorage), [game])
+  const [phase, setPhase] = useState<Phase>('intro')
   const [paused, setPaused] = useState(false)
   const [dead, setDead] = useState(false)
-  const [reviveWait, setReviveWait] = useState(0)
-  const [rank, setRank] = useState<number | null>(null)
-  const [notices, setNotices] = useState<Notice[]>([])
+  const [holds, setHolds] = useState<Hold[]>([])
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [banner, setBanner] = useState<Banner | null>(null)
+  const [view, setView] = useState<GuideView>(() => guide.update(game))
+  const [pad, setPad] = useState<BuildingId | null>(null)
+  const [closedPad, setClosedPad] = useState<BuildingId | null>(null)
+  const [result, setResult] = useState<{ rank: number; trophies: Trophy[] } | null>(null)
+  const hudRef = useRef<HTMLDivElement>(null)
+  const sideRef = useRef<HTMLDivElement>(null)
+  const sheetOpen = !!pad && pad !== 'stall' && pad !== closedPad
 
-  useEffect(() => {
-    if (countdown <= 0) return
-    const id = window.setTimeout(() => setCountdown((c) => c - 1), 1000)
-    return () => window.clearTimeout(id)
-  }, [countdown])
+  const toast = useCallback((text: string) => {
+    const id = ++uid
+    setToasts((t) => [...t, { id, text }].slice(-2))
+    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2200)
+  }, [])
 
+  // Guide, trophies and pad polling: 4 times a second is plenty for UI.
   useEffect(() => {
-    if (reviveWait <= 0) return
-    const id = window.setTimeout(() => setReviveWait((w) => w - 1), 1000)
-    return () => window.clearTimeout(id)
-  }, [reviveWait])
+    if (phase !== 'play') return
+    const id = window.setInterval(() => {
+      const next = guide.update(game)
+      if (next.completed) sfx.quest()
+      setView(next)
+      const now = game.currentPad()
+      setPad(now)
+      setClosedPad((c) => (c === now ? c : null))
+      if (game.finished) return
+      const fresh = trophies.check(game)
+      if (fresh.length) {
+        sfx.trophy()
+        setHolds((h) => [...h, ...fresh.map((trophy): Hold => ({ kind: 'trophy', trophy }))])
+      }
+    }, 250)
+    return () => window.clearInterval(id)
+  }, [phase, game, guide, trophies])
+
+  useEffect(() => () => stopBgm(), [])
 
   const handleEvents = useCallback((events: GameEvent[]) => {
     for (const e of events) {
-      if (e.type === 'dead') {
-        setDead(true)
-        setReviveWait(REVIVE_WAIT)
+      if (e.type === 'dead') setDead(true)
+      else if (e.type === 'toast') toast(e.text)
+      else if (e.type === 'notice') setHolds((h) => [...h, { kind: 'notice', notice: e as Notice }])
+      else if (e.type === 'zone') {
+        const z = game.map.zones.find((x) => x.id === e.zone)
+        if (z) {
+          const id = ++uid
+          setBanner({ id, danger: z.damageMult > 1, stars: z.stars, mult: z.damageMult })
+          window.setTimeout(() => setBanner((b) => (b?.id === id ? null : b)), 1500)
+        }
+      } else if (e.type === 'win') {
+        localStorage.setItem(TUTORIAL_KEY, '1')
+        stopBgm()
+        const rank = addRecord(localStorage, difficulty, { nickname, time: e.time })
+        setResult({ rank, trophies: trophies.check(game) })
+        setPhase('won')
       }
-      if (e.type === 'win') setRank(addRecord(localStorage, difficulty, { nickname, time: e.time }))
     }
-    const newNotices = events.filter((e): e is Notice => e.type === 'notice')
-    if (newNotices.length) setNotices((n) => [...n, ...newNotices])
-    const newToasts = events.flatMap((e) => (e.type === 'toast' ? [{ id: ++toastId, text: e.text }] : []))
-    if (newToasts.length) setToasts((t) => [...t, ...newToasts].slice(-3))
-  }, [difficulty, nickname])
+  }, [game, difficulty, nickname, toast, trophies])
 
-  const expireToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), [])
-  const guideTarget = useCallback(() => nextGoal(game).target, [game])
+  const guideTarget = useCallback((): GuideTarget | null => {
+    if (!view.target || !view.targetName) return null
+    return { at: view.target, label: view.targetName, hideWithin: view.targetName === '猴王' ? 280 : 220 }
+  }, [view])
 
-  const revive = (mode: 'keep' | 'restart') => {
-    game.revive(mode)
-    setDead(false)
+  const cover = useCallback(() => {
+    const hud = hudRef.current?.offsetHeight ?? 150
+    const side = sideRef.current?.offsetHeight ?? 0
+    return { top: hud + 10 + side + 6, bottom: sheetOpen ? SHEET_HEIGHT : 0 }
+  }, [sheetOpen])
+
+  const startRun = () => {
+    unlockAudio()
+    setPhase('countdown')
   }
-
+  const go = useCallback(() => {
+    setPhase('play')
+    startBgm()
+  }, [])
   const again = () => {
     setGame(new Game({ difficulty, seed: Date.now() % 1e9 }))
-    setRank(null)
+    setPhase('intro')
+    setResult(null)
     setDead(false)
-    setNotices([])
-    setCountdown(3)
+    setHolds([])
   }
 
-  const notice = notices[0]
-  const halted = paused || !!notice || countdown > 0 || rank !== null
+  const hold = holds[0]
+  const halted = phase !== 'play' || paused || !!hold
+  const hudH = hudRef.current?.offsetHeight ?? 150
   return (
-    <>
-      <GameView game={game} paused={halted} onEvents={handleEvents} guideTarget={guideTarget} />
-      <Hud game={game} onPause={() => setPaused(true)} />
-      <QuestPanel game={game} />
-      <BuildingMenu game={game} />
-      <Toasts toasts={toasts} onExpire={expireToast} />
-      {countdown > 0 && <div className="countdown" aria-live="assertive">{countdown}</div>}
-      {notice && (
-        <Dialog title={notice.title} tone={notice.tone}>
-          {notice.lines.map((l) => <p key={l}>{l}</p>)}
-          <button type="button" className="btn btn-gold" onClick={() => setNotices((n) => n.slice(1))}>知道了</button>
-        </Dialog>
+    <div className="run">
+      <GameView game={game} paused={halted} onEvents={handleEvents} guide={guideTarget} cover={cover} />
+      <Hud ref={hudRef} game={game} onPause={() => setPaused(true)} />
+      <div className="under-hud" style={{ top: hudH + 10 }}>
+        <div className="side-col" ref={sideRef}>
+          {view.panel && <QuestPanel panel={view.panel} justCompleted={view.completed} />}
+          {toasts.map((t) => <div key={t.id} className="toast pop">{t.text}</div>)}
+        </div>
+        <Minimap game={game} target={view.target} />
+      </div>
+      {banner && (
+        <div key={banner.id} className={`zone-banner pop ${banner.danger ? 'danger' : 'safe'}`} style={{ top: hudH + 90 }}>
+          <div className="l1">{banner.danger ? '進入危險區域' : '進入安全區域'}　<span className="gold">{banner.stars}</span></div>
+          {banner.danger && <div className="l2">傷害 ×{banner.mult}　掉落 ×{banner.mult}</div>}
+        </div>
       )}
-      {paused && (
-        <Dialog title="暫停">
-          <button type="button" className="btn btn-gold" onClick={() => setPaused(false)}>繼續</button>
-          <button type="button" className="btn" onClick={onHome}>放棄回首頁</button>
-        </Dialog>
+      <BuildingMenu game={game} open={sheetOpen ? pad : null} suggest={view.suggest} onClose={() => setClosedPad(pad)} />
+      {phase === 'intro' && <IntroCard difficulty={difficulty} onStart={startRun} />}
+      {phase === 'countdown' && <Countdown onDone={go} />}
+      {hold && phase === 'play' && <HoldCard hold={hold} onNext={() => setHolds((h) => h.slice(1))} />}
+      {paused && <PauseCard elapsed={game.elapsed} onResume={() => setPaused(false)} onHome={onHome} />}
+      {dead && phase === 'play' && !hold && (
+        <DeathCard onKeep={() => { game.revive('keep'); setDead(false) }} onRestart={() => { game.revive('restart'); setDead(false) }} />
       )}
-      {rank !== null && <Result game={game} rank={rank} onAgain={again} onHome={onHome} />}
-      {dead && (
-        <Dialog title="你倒下了">
-          <p>選擇復活方式</p>
-          <button type="button" className="btn btn-gold" disabled={reviveWait > 0} onClick={() => revive('keep')}>
-            {reviveWait > 0 ? `原地復活（休息 ${reviveWait} 秒）` : '原地復活（保留背包與錢）'}
-          </button>
-          <button type="button" className="btn" onClick={() => revive('restart')}>馬上回基地（背包與錢歸零）</button>
-        </Dialog>
+      {phase === 'won' && result && (
+        <ResultCard game={game} nickname={nickname} rank={result.rank} trophies={result.trophies} onAgain={again} onHome={onHome} />
       )}
-    </>
+    </div>
   )
 }

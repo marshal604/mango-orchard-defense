@@ -1,42 +1,50 @@
 import Phaser from 'phaser'
 import { CustomerQueue } from './customers'
 import { PlayerInput } from './input'
+import { DEN, VIEW } from './logic/config'
 import type { Game, GameEvent } from './logic/game'
-import type { Monkey, Worker } from './logic/entities'
 import { padOf, type Point, type ZoneId } from './logic/map'
 import { TRAP_TEXT } from './logic/messages'
-import { addSprite, preloadSprites, setTexture, type Sprite } from './sprites'
+import { sellPrice } from './logic/run'
+import { sfx } from './sfx'
+import { addSprite, createAnims, preloadSprites, type Sprite } from './sprites'
+import { flash, PlayerView, textStyle, WorldViews } from './views'
 
 const ZONE_STYLE: Record<ZoneId, { color: number; tile: string }> = {
   hills: { color: 0x2c6c3c, tile: 'tile_hills' },
-  deep: { color: 0x6b5a3a, tile: 'tile_deep' },
+  deep: { color: 0x3c4a2a, tile: 'tile_deep' },
   village: { color: 0x4ca83c, tile: 'tile_village' },
-  town: { color: 0x8c8c9c, tile: 'tile_town' },
+  town: { color: 0x8c8c7c, tile: 'tile_town' },
 }
 
-const MONKEY_KEY: Record<Monkey['size'], string> = { small: 'monkey', big: 'big_monkey', king: 'monkey_king' }
+export interface GuideTarget { at: Point; label: string; hideWithin: number }
 
 export interface SceneHooks {
   game: Game
   onEvents: (events: GameEvent[]) => void
   isPaused: () => boolean
-  guideTarget: () => Point | null
+  guide: () => GuideTarget | null
+  // CSS pixels covered by the HUD (top) and an open menu sheet (bottom).
+  cover: () => { top: number; bottom: number }
 }
+
+export const dprOf = () => Math.min(window.devicePixelRatio || 1, VIEW.maxPixelRatio)
 
 export class WorldScene extends Phaser.Scene {
   private hooks!: SceneHooks
   private input2!: PlayerInput
-  private player!: Sprite
+  private player!: PlayerView
+  private views!: WorldViews
   private bars!: Phaser.GameObjects.Graphics
-  private sprites = new Map<number, Sprite>()
-  private stumped = new Set<number>()
-  private customers: CustomerQueue | null = null
-  private workerSprites = new Map<Worker, Sprite>()
-  private runners: Sprite[] = []
-  private trapLabel!: Phaser.GameObjects.Text
   private arrow!: Phaser.GameObjects.Triangle
+  private arrowLabel!: Phaser.GameObjects.Text
+  private trapLabel!: Phaser.GameObjects.Text
+  private customers: CustomerQueue | null = null
+  private runners: Sprite[] = []
+  private guide: GuideTarget | null = null
   private guideCd = 0
-  private guide: Point | null = null
+  private saleSum = 0
+  private saleCd = 0
 
   constructor() {
     super('world')
@@ -52,134 +60,80 @@ export class WorldScene extends Phaser.Scene {
 
   create() {
     const { game } = this.hooks
+    createAnims(this)
     this.drawGround()
-    for (const b of game.map.buildings) {
-      const s = addSprite(this, b.id, b.x, b.y + b.h / 2).setDepth(b.y + b.h / 2)
-      if (s instanceof Phaser.GameObjects.Image) s.setScale(Math.min(b.w / s.width, (b.h * 1.2) / s.height))
-      const pad = padOf(b)
-      this.add.ellipse(pad.x, pad.y, 60, 30, 0xf8b800, 0.35).setStrokeStyle(2, 0xf8b800).setDepth(1)
-      this.add.text(b.x, b.y - b.h / 2 - 10, b.name, { fontSize: '20px', color: '#f8f8f8', stroke: '#000', strokeThickness: 4 })
-        .setOrigin(0.5, 1).setDepth(1e6)
-    }
-    for (const p of game.map.pavilions) addSprite(this, 'pavilion', p.x, p.y + 20).setDepth(p.y + 20)
+    this.drawBuildings()
+    for (const p of game.map.pavilions) addSprite(this, 'pavilion', p.x, p.y + 30).setDepth(p.y + 30)
     for (const p of game.map.iceShops) addSprite(this, 'ice_shop', p.x, p.y + 35).setDepth(p.y + 35)
-    for (const p of game.map.chiliFields) addSprite(this, 'chili_field', p.x, p.y + 20).setDepth(p.y + 20)
+    for (const p of game.map.chiliFields) addSprite(this, 'chili_field', p.x, p.y + 30).setDepth(p.y + 30)
     if (game.procession) {
-      const kinds = ['customer_a', 'customer_b', 'customer_c']
-      this.runners = Array.from({ length: 18 }, (_, i) => addSprite(this, kinds[i % 3], 0, 0))
+      this.runners = Array.from({ length: 18 }, (_, i) => addSprite(this, i % 2 ? 'procession_b' : 'procession_a', 0, 0, 'procession'))
     }
-    this.trapLabel = this.add.text(0, 0, '', { fontSize: '22px', color: '#f8b800', stroke: '#000', strokeThickness: 4 })
-      .setOrigin(0.5, 1).setDepth(1e6)
     const stall = game.map.buildings.find((b) => b.id === 'stall')
     if (stall) this.customers = new CustomerQueue(this, padOf(stall))
-    this.player = addSprite(this, 'player', game.player.x, game.player.y)
-    this.bars = this.add.graphics().setDepth(1e6)
-    this.arrow = this.add.triangle(0, 0, 0, -12, 24, 0, 0, 12, 0xf8b800).setStrokeStyle(3, 0x000000).setDepth(1e6)
 
+    this.views = new WorldViews(this)
+    this.player = new PlayerView(this, game)
+    this.bars = this.add.graphics().setDepth(1e6 - 1)
+    this.arrow = this.add.triangle(0, 0, 0, -10, 24, 0, 0, 10, 0xf8b800).setStrokeStyle(3, 0x000000).setDepth(1e6)
+    this.arrowLabel = this.add.text(0, 0, '', textStyle(13, '#f8b800')).setOrigin(0.5).setDepth(1e6)
+    this.trapLabel = this.add.text(0, 0, '', textStyle(18, '#f8b800')).setOrigin(0.5, 1).setDepth(1e6)
     const cam = this.cameras.main
-    cam.setBounds(0, 0, game.map.width, game.map.height)
-    cam.setZoom(0.7)
-    cam.startFollow(this.player, true, 0.15, 0.15)
+    // Hard lock (lerp 1); bounds inflated so the camera never stops at the map edge.
+    cam.setBounds(-1024, -1024, game.map.width + 2048, game.map.height + 2048)
+    cam.startFollow(this.player.sprite, true)
+    this.fitCamera()
     this.input2 = new PlayerInput(this)
   }
 
   update(_time: number, deltaMs: number) {
-    if (this.hooks.isPaused()) return
     const { game } = this.hooks
-    game.step(Math.min(deltaMs / 1000, 0.1), this.input2.read())
-    this.syncPlayer()
-    this.syncWorld()
+    // Paused (intro, countdown, cards): the world stops but is still drawn in place.
+    if (!this.hooks.isPaused()) game.step(Math.min(deltaMs / 1000, 0.1), this.input2.read())
+    this.player.sync(game)
+    this.views.sync(game)
+    this.syncProcession()
+    this.syncTrapLabel()
     this.drawBars()
     this.drawArrow(deltaMs)
+    this.flushSales(deltaMs)
+    this.fitCamera()
+    if (this.hooks.isPaused()) return
     const events = game.drainEvents()
     for (const e of events) this.renderEvent(e)
     if (events.length) this.hooks.onEvents(events)
+  }
+
+  // Zoom 0.7 in CSS pixels; follow offset keeps the player centred between the HUD and an open sheet.
+  private fitCamera() {
+    const cam = this.cameras.main
+    const dpr = dprOf()
+    const zoom = dpr * VIEW.zoom
+    const { top, bottom } = this.hooks.cover()
+    cam.setZoom(zoom)
+    cam.setFollowOffset(0, ((top - bottom) / 2) * dpr / zoom)
   }
 
   private drawGround() {
     for (const z of this.hooks.game.map.zones) {
       const { color, tile } = ZONE_STYLE[z.id]
       if (this.textures.exists(tile)) {
-        this.add.tileSprite(z.rect.x, z.rect.y, z.rect.w, z.rect.h, tile).setOrigin(0, 0).setTileScale(0.5)
+        this.add.tileSprite(z.rect.x, z.rect.y, z.rect.w, z.rect.h, tile).setOrigin(0, 0).setTileScale(0.5).setDepth(-10)
       } else {
-        this.add.rectangle(z.rect.x, z.rect.y, z.rect.w, z.rect.h, color).setOrigin(0, 0)
+        this.add.rectangle(z.rect.x, z.rect.y, z.rect.w, z.rect.h, color).setOrigin(0, 0).setDepth(-10)
       }
     }
   }
 
-  private syncPlayer() {
-    const { game } = this.hooks
-    const p = this.player
-    const s = game.status
-    const bob = s.moving ? Math.abs(Math.sin(game.elapsed * 14)) * 4 : 0
-    p.setPosition(game.player.x, game.player.y - bob).setDepth(game.player.y)
-    p.setAlpha(game.run.dead ? 0.4 : 1).setVisible(!game.trapped)
-    const trap = game.trapped
-    this.trapLabel.setVisible(!!trap)
-    if (trap) this.trapLabel.setText(`${TRAP_TEXT[trap.kind].locked} ${Math.ceil(trap.left)}`).setPosition(trap.at.x, trap.at.y - 80)
-    if (p instanceof Phaser.GameObjects.Image) {
-      if (s.facing === 'left' || s.facing === 'right') p.setFlipX(s.facing === 'left')
-      const swinging = game.elapsed < s.swingUntil
-      const base = 56 / p.height
-      p.setScale(swinging ? base * 1.08 : base, swinging ? base * 0.94 : base)
-      if (s.scratchLeft > 0) p.setTint(0xff9080)
-      else if (s.sprainLeft > 0) p.setTint(0x8fb8ff)
-      else if (s.bellyacheLeft > 0) p.setTint(0xffa060)
-      else if (s.chiliLeft > 0) p.setTint(0xffd060)
-      else p.clearTint()
+  private drawBuildings() {
+    for (const b of this.hooks.game.map.buildings) {
+      const base = b.y + b.h / 2
+      addSprite(this, b.id, b.x, base).setDepth(base)
+      const pad = padOf(b)
+      this.add.ellipse(pad.x, pad.y, 96, 33, 0x000000, 0.25).setStrokeStyle(3, 0xffffff, 0.9).setDepth(-5)
+      const style = { ...textStyle(18, '#f8b800', 0), backgroundColor: '#000000', padding: { x: 8, y: 3 } }
+      this.add.text(b.x, b.y - b.h / 2 - 8, b.name, style).setOrigin(0.5, 1).setDepth(1e6 - 4)
     }
-  }
-
-  private track(id: number, make: () => Sprite): Sprite {
-    let s = this.sprites.get(id)
-    if (!s) {
-      s = make()
-      this.sprites.set(id, s)
-    }
-    return s
-  }
-
-  private syncWorld() {
-    const { game } = this.hooks
-    for (const t of game.trees) {
-      const s = this.track(t.id, () => addSprite(this, t.big ? 'old_tree' : 'fruit_tree', t.x, t.y).setDepth(t.y))
-      if (!t.alive && !this.stumped.has(t.id)) {
-        this.stumped.add(t.id)
-        setTexture(this, s, 'picked_tree')
-        s.setDepth(t.y - 1000)
-      }
-    }
-    for (const n of game.dens) {
-      this.track(n.id, () => addSprite(this, 'monkey_den', n.x, n.y).setDepth(n.y)).setVisible(n.alive)
-    }
-    for (const g of game.monkeys) this.syncGoose(g)
-    for (const w of game.workers) this.syncWorker(w)
-    this.syncProcession()
-    const live = new Set(game.piles.map((p) => p.id))
-    for (const p of game.piles) {
-      this.track(p.id, () => addSprite(this, p.banana > 0 ? 'icon_banana' : 'icon_mango', p.x, p.y).setDepth(p.y - 1).setData('pile', true))
-    }
-    for (const [id, s] of this.sprites) {
-      if (s.getData('pile') && !live.has(id)) {
-        s.destroy()
-        this.sprites.delete(id)
-      }
-    }
-  }
-
-  private syncGoose(g: Monkey) {
-    const s = this.sprites.get(g.id)
-    if (!g.alive) {
-      if (s && !s.getData('dying')) {
-        s.setData('dying', true)
-        this.tweens.add({ targets: s, alpha: 0, duration: 200, onComplete: () => { s.destroy(); this.sprites.delete(g.id) } })
-      }
-      return
-    }
-    const sprite = this.track(g.id, () => addSprite(this, MONKEY_KEY[g.size], g.x, g.y))
-    const hop = g.biting ? Math.abs(Math.sin(this.hooks.game.elapsed * 20)) * 4 : 0
-    sprite.setPosition(g.x, g.y - hop).setDepth(g.y)
-    if (sprite instanceof Phaser.GameObjects.Image) sprite.setFlipX(g.facingRight)
   }
 
   private syncProcession() {
@@ -193,67 +147,86 @@ export class WorldScene extends Phaser.Scene {
       const back = Math.floor(i / 2) * 85 + 20
       const side = i % 2 === 0 ? -14 : 14
       const x = m.head.x - dir.x * back - dir.y * side
-      const y = m.head.y - dir.y * back + dir.x * side - Math.abs(Math.sin(t * 12 + i)) * 4
-      r.setPosition(x, y).setDepth(y)
-      if (r instanceof Phaser.GameObjects.Image) r.setFlipX(dir.x < 0)
+      const y = m.head.y - dir.y * back + dir.x * side - Math.abs(Math.sin(t * 10 + i)) * 3
+      r.setPosition(x, y).setDepth(y).setFlipX(dir.x < 0)
     })
   }
 
-  private syncWorker(w: Worker) {
-    let s = this.workerSprites.get(w)
-    if (!s) {
-      s = addSprite(this, w.kind, w.x, w.y)
-      this.workerSprites.set(w, s)
-    }
-    const prev = s.x
-    const busy = w.target !== null && Math.hypot(w.target.x - w.x, w.target.y - w.y) < 80
-    const hop = busy ? Math.abs(Math.sin(this.hooks.game.elapsed * 12)) * 3 : 0
-    s.setPosition(w.x, w.y - hop).setDepth(w.y).setVisible(w.state !== 'down')
-    if (s instanceof Phaser.GameObjects.Image && w.x !== prev) s.setFlipX(w.x < prev)
-  }
-
-  // Gold arrow orbiting the player toward the quest target; hidden when close.
-  private drawArrow(deltaMs: number) {
-    this.guideCd -= deltaMs
-    if (this.guideCd <= 0) {
-      this.guideCd = 250
-      this.guide = this.hooks.guideTarget()
-    }
-    const p = this.hooks.game.player
-    const t = this.guide
-    const d = t ? Math.hypot(t.x - p.x, t.y - p.y) : 0
-    this.arrow.setVisible(!!t && d > 220 && !this.hooks.game.trapped)
-    if (!t || d <= 220) return
-    const a = Math.atan2(t.y - p.y, t.x - p.x)
-    this.arrow.setPosition(p.x + Math.cos(a) * 56, p.y - 28 + Math.sin(a) * 56).setRotation(a)
+  private syncTrapLabel() {
+    const trap = this.hooks.game.trapped
+    this.trapLabel.setVisible(!!trap)
+    if (trap) this.trapLabel.setText(`${TRAP_TEXT[trap.kind].locked} ${Math.ceil(trap.left)}`).setPosition(trap.at.x, trap.at.y - 70)
   }
 
   private drawBars() {
     const { game } = this.hooks
     const g = this.bars.clear()
     const bar = (x: number, y: number, w: number, ratio: number, color: number) => {
-      g.fillStyle(0x000000, 0.7).fillRect(x - w / 2 - 2, y - 2, w + 4, 10)
-      g.fillStyle(color, 1).fillRect(x - w / 2, y, w * Math.max(0, ratio), 6)
+      g.fillStyle(0x000000, 0.85).fillRect(x - w / 2 - 2, y - 2, w + 4, 9)
+      g.fillStyle(color, 1).fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, ratio)), 5)
     }
-    if (!game.trapped) bar(game.player.x, game.player.y - 72, 48, game.run.hp / game.run.hpMax, 0x5cd85c)
-    for (const n of game.dens) if (n.alive && n.hp < 13) bar(n.x, n.y - 70, 48, n.hp / 13, 0xd84c4c)
+    if (!game.run.dead && !game.trapped) {
+      const r = game.run.hp / game.run.hpMax
+      bar(game.player.x, game.player.y - 68, 54, r, r > 0.5 ? 0x5ce65c : r > 0.25 ? 0xf8d800 : 0xff4040)
+    }
+    const k = game.king
+    if (k.alive) bar(k.x, k.y - 100, 64, k.hp / k.hpMax, 0xd82800)
+    for (const d of game.dens) if (d.alive && d.hp < DEN.hp) bar(d.x, d.y - 66, 48, d.hp / DEN.hp, 0xf8b800)
+  }
+
+  // Gold arrow orbiting the player's chest toward the guide target, with the target name.
+  private drawArrow(deltaMs: number) {
+    this.guideCd -= deltaMs
+    if (this.guideCd <= 0) {
+      this.guideCd = 200
+      this.guide = this.hooks.guide()
+    }
+    const { game } = this.hooks
+    const p = game.player
+    const t = this.guide
+    const d = t ? Math.hypot(t.at.x - p.x, t.at.y - p.y) : 0
+    const show = !!t && d > t.hideWithin && !game.trapped && !game.run.dead
+    this.arrow.setVisible(show)
+    this.arrowLabel.setVisible(show)
+    if (!show || !t) return
+    const a = Math.atan2(t.at.y - (p.y - 28), t.at.x - p.x)
+    this.arrow.setPosition(p.x + Math.cos(a) * 56, p.y - 28 + Math.sin(a) * 56).setRotation(a)
+    this.arrowLabel.setText(t.label).setPosition(p.x + Math.cos(a) * 88, p.y - 28 + Math.sin(a) * 82)
+  }
+
+  // "+$N" above the stand is aggregated every 0.3 s instead of one float per item.
+  private flushSales(deltaMs: number) {
+    this.saleCd -= deltaMs
+    if (this.saleSum <= 0 || this.saleCd > 0) return
+    const stall = this.hooks.game.map.buildings.find((b) => b.id === 'stall')
+    if (stall) this.float(stall.x, stall.y - stall.h / 2 - 40, `+$${this.saleSum}`, '#f8b800')
+    this.saleSum = 0
+    this.saleCd = 300
+  }
+
+  private float(x: number, y: number, text: string, color: string, ms = 800) {
+    const t = this.add.text(x, y, text, textStyle(15, color)).setOrigin(0.5, 1).setDepth(1e6)
+    this.tweens.add({ targets: t, y: y - 26, alpha: 0, duration: ms, ease: 'Quad.easeOut', onComplete: () => t.destroy() })
   }
 
   private renderEvent(e: GameEvent) {
+    const { game } = this.hooks
     if (e.type === 'float') {
-      const t = this.add.text(e.x, e.y, e.text, { fontSize: '22px', color: e.color, stroke: '#000', strokeThickness: 4 })
-        .setOrigin(0.5).setDepth(1e6)
-      this.tweens.add({ targets: t, y: e.y - 40, alpha: 0, duration: 800, onComplete: () => t.destroy() })
-    } else if (e.type === 'hit' && e.target !== 'player') {
-      const s = this.sprites.get(e.target.id)
-      if (s instanceof Phaser.GameObjects.Image) {
-        s.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL)
-        this.time.delayedCall(60, () => s.active && s.clearTint().setTintMode(Phaser.TintModes.MULTIPLY))
-      }
-    } else if (e.type === 'sale') {
-      this.customers?.sale(e.kind, this.hooks.game.player)
+      this.float(e.x, e.y, e.text, e.color, e.text.length > 6 ? 1200 : 800)
     } else if (e.type === 'hit') {
+      const s = this.views.sprite(e.target.id)
+      if (s) flash(s)
+      if (e.target.kind === 'tree' && !e.lethal) this.views.wiggleTree(e.target)
+      if (e.byPlayer && e.target.kind === 'monkey') sfx.hitMonkey(e.lethal)
+      else if (e.byPlayer) sfx.chop(e.lethal)
+    } else if (e.type === 'hurt') {
+      this.player.hurt(game.elapsed)
       this.cameras.main.shake(80, 0.004)
+      sfx.hurt()
+    } else if (e.type === 'sale') {
+      this.customers?.sale(e.kind, game.player)
+      this.saleSum += sellPrice(e.kind, game.run.levels)
+      sfx.sale()
     }
   }
 }

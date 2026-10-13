@@ -91,3 +91,17 @@ describe('the procession', () => {
     expect(Math.abs(game.player.y - 1600)).toBeGreaterThanOrEqual(30)
   })
 })
+
+describe('procession passage', () => {
+  it('lets the player slip through after 5 s of being blocked', () => {
+    const game = withMap({ processionPath: [{ x: 300, y: 1600 }, { x: 4500, y: 1600 }] })
+    const p = game.procession!
+    let freed = false
+    for (let t = 0; t < 7 && !freed; t += 0.05) {
+      game.teleport({ x: p.head.x - 100, y: 1600 })
+      game.step(0.05, idle)
+      freed = Math.abs(game.player.y - 1600) < 1
+    }
+    expect(freed).toBe(true)
+  })
+})
