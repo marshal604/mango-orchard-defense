@@ -4,6 +4,7 @@ import { BuildingMenu } from './ui/BuildingMenu'
 import { Dialog } from './ui/Dialog'
 import { GameView } from './ui/GameView'
 import { Hud } from './ui/Hud'
+import { Result } from './ui/Result'
 import { Toasts, type Toast } from './ui/Toasts'
 
 type Notice = Extract<GameEvent, { type: 'notice' }>
@@ -11,7 +12,8 @@ type Notice = Extract<GameEvent, { type: 'notice' }>
 let toastId = 0
 
 export default function App() {
-  const [game] = useState(() => new Game({ difficulty: 'normal', seed: Date.now() % 1e9 }))
+  const [game, setGame] = useState(() => new Game({ difficulty: 'normal', seed: Date.now() % 1e9 }))
+  const [won, setWon] = useState(false)
   const [paused, setPaused] = useState(false)
   const [dead, setDead] = useState(false)
   const [notices, setNotices] = useState<Notice[]>([])
@@ -19,6 +21,7 @@ export default function App() {
 
   const handleEvents = useCallback((events: GameEvent[]) => {
     if (events.some((e) => e.type === 'dead')) setDead(true)
+    if (events.some((e) => e.type === 'win')) setWon(true)
     const newNotices = events.filter((e): e is Notice => e.type === 'notice')
     if (newNotices.length) setNotices((n) => [...n, ...newNotices])
     const newToasts = events.flatMap((e) => (e.type === 'toast' ? [{ id: ++toastId, text: e.text }] : []))
@@ -30,6 +33,13 @@ export default function App() {
   const revive = (mode: 'keep' | 'restart') => {
     game.revive(mode)
     setDead(false)
+  }
+
+  const restart = () => {
+    setGame(new Game({ difficulty: game.difficulty, seed: Date.now() % 1e9 }))
+    setWon(false)
+    setDead(false)
+    setNotices([])
   }
 
   const notice = notices[0]
@@ -50,6 +60,7 @@ export default function App() {
           <button type="button" className="btn btn-gold" onClick={() => setPaused(false)}>繼續</button>
         </Dialog>
       )}
+      {won && <Result game={game} onAgain={restart} onHome={restart} />}
       {dead && (
         <Dialog title="你倒下了">
           <p>選擇復活方式</p>

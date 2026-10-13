@@ -7,7 +7,7 @@ import { DEFAULT_MAP, dist, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
 import { makeRng } from './rng'
 import { attackRange, playerSpeed, racketOf, RunState, sellInterval, sellPrice } from './run'
 import { knockDown, makeWorker, updateWorker, workerBagFree, type WorkerWorld } from './workers'
-import { makeGoose, makeTree, newId, populate } from './world'
+import { makeGoose, makeNest, makeTree, newId, populate } from './world'
 
 export interface Input { move: Point }
 
@@ -23,6 +23,7 @@ export type GameEvent =
   | { type: 'buyFail'; track: Track }
   | { type: 'notice'; title: string; lines: string[]; tone: 'info' | 'warn' }
   | { type: 'delivery'; amount: number }
+  | { type: 'win'; time: number }
 
 export interface GameOptions {
   difficulty: Difficulty
@@ -56,12 +57,14 @@ export class Game implements GooseWorld, WorkerWorld {
   readonly geese: Goose[]
   readonly nests: Nest[]
   readonly workers: Worker[] = []
+  readonly king: Goose
   piles: Pile[] = []
   status: PlayerStatus = {
     poisonLeft: 0, poisonDps: 0, slowLeft: 0, slowMult: 1, hasteLeft: 0,
     invulnerableUntil: 0, lastHurt: 0, attackCd: 0, swingUntil: 0, facing: 'down', moving: false,
   }
   elapsed = 0
+  finished = false
   zone: ZoneId
   private sellCd = 0
   private deliveryCd = 0
@@ -80,6 +83,7 @@ export class Game implements GooseWorld, WorkerWorld {
     this.trees = world.trees
     this.geese = world.geese
     this.nests = world.nests
+    this.king = this.spawnGoose(KING.home, 'king')
   }
 
   // --- GooseWorld ---
@@ -105,10 +109,12 @@ export class Game implements GooseWorld, WorkerWorld {
 
   // --- public API ---
   step(dt: number, input: Input): void {
+    if (this.finished) return
     this.elapsed += dt
     this.updatePlayer(dt, input.move)
     for (const g of this.geese) updateGoose(this, g, dt)
     for (const w of this.workers) updateWorker(this, w, dt)
+    this.updateNests(dt)
     this.updateStall(dt)
     this.updateDelivery(dt)
     this.trackZone()
@@ -171,6 +177,12 @@ export class Game implements GooseWorld, WorkerWorld {
     const g = makeGoose(this.map, p, size, this.difficulty, nest)
     this.geese.push(g)
     return g
+  }
+
+  spawnNest(p: Point): Nest {
+    const n = makeNest(this.map, p)
+    this.nests.push(n)
+    return n
   }
 
   protected emit(e: GameEvent): void {
@@ -332,11 +344,40 @@ export class Game implements GooseWorld, WorkerWorld {
     this.checkMilestones()
     const base = g.size === 'king' ? KING.feathers : GOOSE[g.size].feathers
     this.giveLoot(by, 'feather', Math.round(base * g.zone.dropMult), g)
+    if (g.size !== 'king') return
+    this.finished = true
+    this.emit({ type: 'float', x: g.x, y: g.y - 100, text: '打倒鵝王！', color: '#f8b800' })
+    this.emit({ type: 'win', time: this.elapsed })
   }
 
   protected destroyNest(n: Nest): void {
     this.run.stats.nests++
     n.respawnLeft = NEST.respawnSec
+    this.run.earn(NEST.reward)
+    this.status.hasteLeft = NEST.haste.sec
+    this.emit({ type: 'float', x: n.x, y: n.y - 60, text: `拆鵝窩 +$${NEST.reward}　攻速 x${NEST.haste.mult}`, color: '#f8b800' })
+  }
+
+  private updateNests(dt: number): void {
+    const every = this.run.cfg.nestSpawnEvery
+    for (const n of this.nests) {
+      if (!n.alive) {
+        n.respawnLeft -= dt
+        if (n.respawnLeft <= 0) Object.assign(n, { alive: true, hp: NEST.hp, spawnCd: 0 })
+        continue
+      }
+      n.spawnCd += dt
+      if (n.spawnCd < every) continue
+      n.spawnCd = 0
+      if (n.children >= NEST.maxAlive) continue
+      const angle = this.rng() * Math.PI * 2
+      const p = {
+        x: clamp(n.x + Math.cos(angle) * NEST.spawnRadius, 10, this.map.width - 10),
+        y: clamp(n.y + Math.sin(angle) * NEST.spawnRadius, 30, this.map.height - 10),
+      }
+      this.spawnGoose(p, 'small', n)
+      n.children++
+    }
   }
 
   // --- WorkerWorld ---
