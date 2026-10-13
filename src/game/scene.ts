@@ -77,8 +77,7 @@ export class WorldScene extends Phaser.Scene {
     this.arrowLabel = this.add.text(0, 0, '', textStyle(13, '#f8b800')).setOrigin(0.5).setDepth(1e6)
     this.trapLabel = this.add.text(0, 0, '', textStyle(18, '#f8b800')).setOrigin(0.5, 1).setDepth(1e6)
     const cam = this.cameras.main
-    // Hard lock (lerp 1); bounds inflated so the camera never stops at the map edge.
-    cam.setBounds(-1024, -1024, game.map.width + 2048, game.map.height + 2048)
+    // Hard lock (lerp 1); bounds are kept to the map in fitCamera so no background shows past the edge.
     cam.startFollow(this.player.sprite, true)
     this.fitCamera()
     this.input2 = new PlayerInput(this)
@@ -110,6 +109,11 @@ export class WorldScene extends Phaser.Scene {
     const { top, bottom } = this.hooks.cover()
     cam.setZoom(zoom)
     cam.setFollowOffset(0, ((top - bottom) / 2) * dpr / zoom)
+    // Stop at the map edge; extend by the HUD / sheet so the edge row is still visible below / above them.
+    const { width, height } = this.hooks.game.map
+    const topWorld = (top * dpr) / zoom
+    const bottomWorld = (bottom * dpr) / zoom
+    cam.setBounds(0, -topWorld, width, height + topWorld + bottomWorld)
   }
 
   private drawGround() {
