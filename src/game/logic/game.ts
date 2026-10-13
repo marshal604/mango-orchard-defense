@@ -106,7 +106,7 @@ export class Game implements GooseWorld, WorkerWorld {
     const cfg = this.run.cfg
     const dmg = g.size === 'king' ? cfg.king.bite : (g.size === 'big' ? cfg.bigGooseBite : cfg.gooseBite) * g.zone.damageMult
     if (a !== 'player') return this.hurtWorker(a, dmg)
-    if (!this.hurtPlayer(dmg)) return
+    if (!this.hurtPlayer(dmg) || this.run.dead) return
     if (g.size === 'king') {
       this.poison(cfg.king.poison.dps, cfg.king.poison.sec)
       this.slow(cfg.king.slow.mult, cfg.king.slow.sec)

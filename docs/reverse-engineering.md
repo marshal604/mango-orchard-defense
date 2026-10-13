@@ -29,7 +29,8 @@ Observed = read directly from shipped JS. Inferred = reasoning on top of it.
 
 - Unknown zone -> falls back to the base zone.
 - Buildings: stall + mill in base zone, tools in north, shop in south-east. Safe area around each
-  building (`x-w/2-50 .. x+w/2+50`, `y-h/2 .. y+h/2+110`): rats do not bite inside, regen happens there in hell mode.
+  building, with `y` = sprite BOTTOM (origin 0.5,1): `x-w/2-50 .. x+w/2+50`, `y-h/2 .. y+110`
+  (i.e. from the building's middle to 110 px below its base): rats do not bite inside, regen happens there in hell mode.
 - Trees are placed procedurally with a fixed seed, min spacing 40 (64 for big trees), not within 220 px of buildings.
 - Player spawns at stall + (110, 50).
 
@@ -73,7 +74,7 @@ Weapons (damage / interval s / can cut big tree):
 | 5 | harvester II | 7 | 0.27 | yes |
 
 - Attack ranges by level: 48 / 64 / 80 (plus target hit radius).
-- Damage lands at 50% of the swing (`impactAt`). Nest haste: attack interval / 2 for 10 s.
+- Damage lands at 50% of the swing (`impactAt`). Remake applies it at swing start (simplification). Nest haste: attack interval / 2 for 10 s.
 - Target priority: rats chasing the player > any rat > nest > tree (big trees only with a saw).
   If only a big tree is in range without a saw, toast "need chainsaw" at most every 2 s.
 - The player does NOT need to stop to attack in stage 1 (attacks whenever a target is in range).
@@ -81,7 +82,8 @@ Weapons (damage / interval s / can cut big tree):
 ## Enemies (observed)
 
 - Rat base speed 180. small: hp 4, meat 1, speed x0.6, hit radius 12. big: hp 9, meat 4, speed x0.7, hit radius 18.
-- Bite interval 0.7 s, bite range 28. Wander radius 90 at half speed, pause 1-3 s. Leash 360 from home.
+- Bite interval 0.7 s, bite range 28. Wander radius 90 at half speed, pause 1-3 s. Leash: gives up when the TARGET is more than 360 away
+  (distance goose -> target, not from home; only the King leashes from home).
 - States: wander -> chase (player within sight, or hit by someone) -> back to wander when target dead,
   target sheltered (parasol / safe area) or out of leash.
 - Big rats poison. King: home (260, 3010), hp per difficulty, speed x0.55, sight 220, leash 560,

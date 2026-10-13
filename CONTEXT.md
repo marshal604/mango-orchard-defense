@@ -23,7 +23,7 @@ Mechanics and numbers follow that document; names follow this glossary.
 | Ball boy / Goose wrangler | Workers who collect cork / hunt geese. | lumberjack / catcher |
 | Zone | One of four map regions with a danger rating (stars) that multiplies damage and drops. | zone |
 | Lakeside / Wetland / Central park / Arena district | The four zones (north, SW, base, SE). | 北投 / 萬華 / 大安 / 信義 |
-| Shade tent | Hazard-free spot: geese ignore you, fast regen. | parasol |
+| Shade tent | Geese ignore you, fast regen; entering takes all cash until $2000 total is donated. | parasol |
 | Locker room | Trap: locked 5 s, then faster but draining hp. | smoking booth |
 | Roast goose stand | Trap: locked 5 s, then burn ability for 30 s. | hot spring |
 | Marathon | Crowd walking a road that blocks the player. | parade |

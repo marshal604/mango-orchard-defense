@@ -52,6 +52,18 @@ describe('the Goose King', () => {
     expect(game.status.slowLeft).toBeGreaterThan(0)
   })
 
+  it('does not leave the player poisoned after a fatal bite', () => {
+    const game = newGame()
+    game.setRacket(-1)
+    game.run.hp = 1
+    game.teleport({ x: game.king.x + 20, y: game.king.y })
+    game.step(0.05, idle)
+    expect(game.run.dead).toBe(true)
+    game.revive('keep')
+    expect(game.status.poisonLeft).toBe(0)
+    expect(game.status.slowLeft).toBe(0)
+  })
+
   it('returns home and regenerates once dragged past its leash', () => {
     const game = newGame()
     const king = game.king
