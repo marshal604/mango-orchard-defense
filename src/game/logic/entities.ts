@@ -47,7 +47,7 @@ export interface Goose {
   wanderTo: Point | null
   pauseLeft: number
   biteCd: number
-  burnLeft: number
+  moltLeft: number
   nest: Nest | null
   lockedBy: Worker | null
   facingRight: boolean

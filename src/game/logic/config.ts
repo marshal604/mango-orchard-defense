@@ -23,8 +23,8 @@ export const DIFFICULTY = {
     bagBase: 30,
     priceMult: 1,
     workersCanDie: false,
-    bigGoosePoison: { dps: 2, sec: 3 },
-    king: { hp: 120, bite: 12.48, poison: { dps: 3, sec: 4 }, slow: { mult: 0.6, sec: 2.5 } },
+    bigGooseScrape: { dps: 2, sec: 3 },
+    king: { hp: 120, bite: 12.48, scrape: { dps: 3, sec: 4 }, sprain: { mult: 0.6, sec: 2.5 } },
   },
   hell: {
     label: '地獄',
@@ -38,8 +38,8 @@ export const DIFFICULTY = {
     bagBase: 15,
     priceMult: 1.5,
     workersCanDie: true,
-    bigGoosePoison: { dps: 3, sec: 4 },
-    king: { hp: 160, bite: 24.96, poison: { dps: 4, sec: 5 }, slow: { mult: 0.5, sec: 3.5 } },
+    bigGooseScrape: { dps: 3, sec: 4 },
+    king: { hp: 160, bite: 24.96, scrape: { dps: 4, sec: 5 }, sprain: { mult: 0.5, sec: 3.5 } },
   },
 } as const
 
@@ -142,7 +142,7 @@ export const SHADE = { radius: 44, regenPerSec: 10, freeAfter: 2000 } as const
 
 export const TRAPS = {
   locker: { lockSec: 5, speedMult: 1.5, drainPerSec: 2, effectSec: 10, w: 90, h: 70 },
-  roast: { lockSec: 5, radius: 75, abilitySec: 30, burn: { dps: 1, sec: 3 } },
+  drink: { lockSec: 5, radius: 75, abilitySec: 30, molt: { dps: 1, sec: 3 } },
 } as const
 
 export const MARATHON = { speed: 110, length: 26 * 30, width: 60, pushGain: 12 } as const

@@ -28,7 +28,7 @@ longest side of the subject matches "target px" below. Save PNG into `public/ass
 | supply.png | supply store with backpacks and boxes | 220 |
 | shade_tent.png | white pop-up shade tent | 120 |
 | locker_room.png | small locker room hut | 140 |
-| roast_stand.png | roast goose food stand with smoke | 140 |
+| drink_stand.png | small sports drink stand / kiosk with a cooler, colourful sports drink bottles and a shuttlecock logo sign | 140 |
 | icon_cork.png | cork piece icon | 48 |
 | icon_feather.png | white feather icon | 48 |
 | icon_coin.png | gold coin icon | 48 |

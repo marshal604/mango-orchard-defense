@@ -40,7 +40,7 @@ describe('shade tents', () => {
 })
 
 describe('locker rooms', () => {
-  it('lock the player for 5 s, then make them faster but drain 2 hp/s for 10 s', () => {
+  it('lock the player for 5 s, then rush mode: faster but draining 2 hp/s for 10 s', () => {
     const game = withMap({ lockers: [SPOT] })
     game.teleport(SPOT)
     game.step(0.05, idle)
@@ -67,18 +67,18 @@ describe('locker rooms', () => {
   })
 })
 
-describe('roast goose stands', () => {
-  it('lock the player 5 s then set geese they hit on fire', () => {
-    const game = withMap({ roasts: [SPOT] })
+describe('sports drink stands', () => {
+  it('hold the player 5 s then make geese they hit keep molting', () => {
+    const game = withMap({ drinks: [SPOT] })
     game.teleport(SPOT)
     game.step(0.05, idle)
-    expect(game.trapped?.kind).toBe('roast')
+    expect(game.trapped?.kind).toBe('drink')
     run(game, 5.1)
     expect(game.trapped).toBeNull()
-    expect(game.status.burnAbilityLeft).toBeGreaterThan(20)
+    expect(game.status.hypeLeft).toBeGreaterThan(20)
     const goose = game.spawnGoose({ x: game.player.x + 30, y: game.player.y }, 'big')
     run(game, 0.5)
-    expect(goose.burnLeft).toBeGreaterThan(0)
+    expect(goose.moltLeft).toBeGreaterThan(0)
   })
 })
 

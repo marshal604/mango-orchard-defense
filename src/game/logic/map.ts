@@ -24,7 +24,7 @@ export interface GameMap {
   buildings: Building[]
   shades: Point[]
   lockers: Point[]
-  roasts: Point[]
+  drinks: Point[]
   marathonPath: Point[]
 }
 
@@ -66,7 +66,7 @@ export const DEFAULT_MAP: GameMap = {
   ],
   shades: [{ x: 1300, y: 2200 }, { x: 900, y: 2700 }, { x: 3000, y: 900 }, { x: 3700, y: 2900 }],
   lockers: [{ x: 1800, y: 1900 }, { x: 3500, y: 2000 }],
-  roasts: [{ x: 1100, y: 1000 }],
+  drinks: [{ x: 1100, y: 1000 }],
   marathonPath: [{ x: 300, y: 1600 }, { x: 4500, y: 1600 }],
 }
 

@@ -21,7 +21,7 @@ export const DISPLAY: Record<string, number> = {
   supply: 110,
   shade_tent: 60,
   locker_room: 70,
-  roast_stand: 70,
+  drink_stand: 70,
   icon_cork: 20,
   icon_feather: 20,
   shuttle: 16,

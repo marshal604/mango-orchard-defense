@@ -109,13 +109,13 @@ describe('geese', () => {
     expect(goose.state).not.toBe('chase')
   })
 
-  it('big geese poison the player', () => {
+  it('big geese scrape the player so they keep bleeding', () => {
     const game = newGame()
     game.teleport(LAKE)
     game.setRacket(-1)
     game.spawnGoose({ x: LAKE.x + 10, y: LAKE.y }, 'big')
     game.step(0.05, idle)
-    expect(game.status.poisonLeft).toBeGreaterThan(0)
+    expect(game.status.scrapeLeft).toBeGreaterThan(0)
   })
 })
 

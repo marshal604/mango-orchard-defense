@@ -20,7 +20,7 @@ export function makeGoose(map: GameMap, p: Point, size: GooseSize, difficulty: D
   return {
     kind: 'goose', id: newId(), x: p.x, y: p.y, size, hp, hpMax: hp, alive: true,
     zone: zoneAt(map, p), home: { ...p }, state: 'wander', target: null, wanderTo: null,
-    pauseLeft: 0, biteCd: 0, burnLeft: 0, nest, lockedBy: null, facingRight: false, biting: false,
+    pauseLeft: 0, biteCd: 0, moltLeft: 0, nest, lockedBy: null, facingRight: false, biting: false,
   }
 }
 

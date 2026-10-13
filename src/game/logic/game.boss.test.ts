@@ -42,17 +42,17 @@ describe('the Goose King', () => {
     expect(new Game({ difficulty: 'hell', seed: 1 }).king.hp).toBe(160)
   })
 
-  it('poisons and slows the player on bite', () => {
+  it('scrapes the player and sprains their ankle on a peck', () => {
     const game = newGame()
     game.setRacket(-1)
     game.teleport({ x: game.king.x + 20, y: game.king.y })
     run(game, 0.1)
     expect(game.run.hp).toBeCloseTo(170 - 12.48 - 3 * 0.05, 0)
-    expect(game.status.poisonLeft).toBeGreaterThan(0)
-    expect(game.status.slowLeft).toBeGreaterThan(0)
+    expect(game.status.scrapeLeft).toBeGreaterThan(0)
+    expect(game.status.sprainLeft).toBeGreaterThan(0)
   })
 
-  it('does not leave the player poisoned after a fatal bite', () => {
+  it('does not leave the player bleeding after a fatal peck', () => {
     const game = newGame()
     game.setRacket(-1)
     game.run.hp = 1
@@ -60,8 +60,8 @@ describe('the Goose King', () => {
     game.step(0.05, idle)
     expect(game.run.dead).toBe(true)
     game.revive('keep')
-    expect(game.status.poisonLeft).toBe(0)
-    expect(game.status.slowLeft).toBe(0)
+    expect(game.status.scrapeLeft).toBe(0)
+    expect(game.status.sprainLeft).toBe(0)
   })
 
   it('returns home and regenerates once dragged past its leash', () => {

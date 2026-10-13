@@ -7,20 +7,20 @@ import { MILESTONES, NEST, SHADE, TRAPS, WORKER } from './config'
 const WORKER_NAME: Record<Worker['kind'], string> = { ballboy: '撿球小弟', wrangler: '趕鵝員' }
 
 export const MSG = {
-  poisoned: '中毒！',
-  slowed: '變慢！',
+  scraped: '破皮了！',
+  sprained: '扭到腳！',
   needCarbon: '需要碳纖拍',
   needCarbonToast: '老軟木橡樹要碳纖拍才砍得動：到球拍專賣店升級球拍',
   kingDown: '打倒鵝王！',
-  nestDown: `拆鵝窩 +$${NEST.reward}　攻速 x${NEST.haste.mult}`,
+  nestDown: `拆鵝窩 +$${NEST.reward}　手感發燙 攻速 x${NEST.haste.mult}`,
   delivery: (amount: number) => `外送 +$${amount}`,
   workerDown: (w: Worker) => `${WORKER_NAME[w.kind]}被鵝打倒了，${WORKER.respawnDelay} 秒後在球友會館復活`,
-  trapEnter: (kind: 'locker' | 'roast') => (kind === 'locker'
-    ? `誤闖更衣室，被關 ${TRAPS.locker.lockSec} 秒換衣服…`
-    : `被烤鵝攤老闆拉去吃烤鵝，${TRAPS.roast.lockSec} 秒…`),
-  trapLeave: (kind: 'locker' | 'roast') => (kind === 'locker'
-    ? `換好球衣了！${TRAPS.locker.effectSec} 秒內跑更快，但每秒掉 ${TRAPS.locker.drainPerSec} 滴血`
-    : `吃飽了！${TRAPS.roast.abilitySec} 秒內打到的鵝會著火`),
+  trapEnter: (kind: 'locker' | 'drink') => (kind === 'locker'
+    ? `誤闖更衣室，被拉去換比賽服 ${TRAPS.locker.lockSec} 秒…`
+    : `被運動飲料攤的試喝隊伍卡住 ${TRAPS.drink.lockSec} 秒…`),
+  trapLeave: (kind: 'locker' | 'drink') => (kind === 'locker'
+    ? `進入拚戰模式！${TRAPS.locker.effectSec} 秒內跑更快，但每秒流失 ${TRAPS.locker.drainPerSec} 點體力`
+    : `熱血沸騰！${TRAPS.drink.abilitySec} 秒內被你打到的鵝會嚇到一直掉毛`),
 }
 
 export const shadeNotice = (fee: number, donated: number): Notice => ({

@@ -62,7 +62,7 @@ export class WorldScene extends Phaser.Scene {
     }
     for (const p of game.map.shades) addSprite(this, 'shade_tent', p.x, p.y + 20).setDepth(p.y + 20)
     for (const p of game.map.lockers) addSprite(this, 'locker_room', p.x, p.y + 35).setDepth(p.y + 35)
-    for (const p of game.map.roasts) addSprite(this, 'roast_stand', p.x, p.y + 20).setDepth(p.y + 20)
+    for (const p of game.map.drinks) addSprite(this, 'drink_stand', p.x, p.y + 20).setDepth(p.y + 20)
     if (game.marathon) {
       const kinds = ['customer_a', 'customer_b', 'customer_c']
       this.runners = Array.from({ length: 18 }, (_, i) => addSprite(this, kinds[i % 3], 0, 0))
@@ -115,16 +115,16 @@ export class WorldScene extends Phaser.Scene {
     p.setAlpha(game.run.dead ? 0.4 : 1).setVisible(!game.trapped)
     const trap = game.trapped
     this.trapLabel.setVisible(!!trap)
-    if (trap) this.trapLabel.setText(`${trap.kind === 'locker' ? '換衣中' : '吃烤鵝'} ${Math.ceil(trap.left)}`).setPosition(trap.at.x, trap.at.y - 80)
+    if (trap) this.trapLabel.setText(`${trap.kind === 'locker' ? '換比賽服' : '排隊試喝'} ${Math.ceil(trap.left)}`).setPosition(trap.at.x, trap.at.y - 80)
     if (p instanceof Phaser.GameObjects.Image) {
       if (s.facing === 'left' || s.facing === 'right') p.setFlipX(s.facing === 'left')
       const swinging = game.elapsed < s.swingUntil
       const base = 56 / p.height
       p.setScale(swinging ? base * 1.08 : base, swinging ? base * 0.94 : base)
-      if (s.poisonLeft > 0) p.setTint(0x9cff6a)
-      else if (s.slowLeft > 0) p.setTint(0x8fb8ff)
-      else if (s.lockerLeft > 0) p.setTint(0xffa060)
-      else if (s.burnAbilityLeft > 0) p.setTint(0xffd060)
+      if (s.scrapeLeft > 0) p.setTint(0xff9080)
+      else if (s.sprainLeft > 0) p.setTint(0x8fb8ff)
+      else if (s.rushLeft > 0) p.setTint(0xffa060)
+      else if (s.hypeLeft > 0) p.setTint(0xffd060)
       else p.clearTint()
     }
   }

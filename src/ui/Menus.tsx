@@ -76,7 +76,7 @@ const STEPS = [
   { img: 'cork_tree', title: '砍軟木樹、趕野鵝', text: '靠近就會自動揮拍，軟木和鵝毛自動進背包' },
   { img: 'stall', title: '回收購攤賣掉', text: '背包快滿了就回中央運動公園的收購攤，站上前面的圓圈，排隊的客人會一個一個跟你買' },
   { img: 'proshop', title: '買升級', text: '球友會館（請工人）、球拍專賣店（球拍、護具）、補給站（背包、收購價）分散在地圖上，站上圓圈打開選單。建物周圍是安全區。不知道去哪就看任務，金色箭頭會帶路' },
-  { img: 'goose_king', title: '打倒鵝王', text: '鵝王在地圖西南角的濕地，被牠啄會中毒又變慢。打倒牠就通關，越快越好' },
+  { img: 'goose_king', title: '打倒鵝王', text: '鵝王在地圖西南角的濕地，被牠啄到會破皮一直掉血、還會扭到腳跑不快。打倒牠就通關，越快越好' },
 ]
 
 export function HowTo({ onBack }: { onBack: () => void }) {
@@ -94,9 +94,9 @@ export function HowTo({ onBack }: { onBack: () => void }) {
         </ol>
         <small>
           手機：按住畫面任何地方拖曳移動。電腦：WASD 或方向鍵。<br />
-          ★ 越多的區域掉落越多、鵝也越兇。大鵝會讓你中毒。站在遮陽棚下鵝不會追你（第一次要捐光現金，累積 ${SHADE.freeAfter} 後免費）；
-          別誤闖更衣室（關 {TRAPS.locker.lockSec} 秒、出來變快但會掉血）；烤鵝攤會讓你打到的鵝著火。
-          拆掉鵝窩有 ${NEST.reward}，攻擊速度 ×{NEST.haste.mult} {NEST.haste.sec} 秒。鵝王血量 {DIFFICULTY.normal.king.hp}（地獄 {DIFFICULTY.hell.king.hp}），會在離家 {KING.leashRadius} 外放棄追你並回血。
+          ★ 越多的區域掉落越多、鵝也越兇。大鵝會啄到你破皮，破皮時血會一直掉。站在遮陽棚下鵝不會追你（第一次要捐光現金，累積 ${SHADE.freeAfter} 後免費）；
+          別誤闖更衣室（換比賽服 {TRAPS.locker.lockSec} 秒，出來進入拚戰模式：變快但體力一直流失）；喝了運動飲料攤的飲料會熱血沸騰，打到的鵝會一直掉毛。
+          拆掉鵝窩有 ${NEST.reward}，而且手感發燙：攻擊速度 ×{NEST.haste.mult} {NEST.haste.sec} 秒。鵝王血量 {DIFFICULTY.normal.king.hp}（地獄 {DIFFICULTY.hell.king.hp}），會在離家 {KING.leashRadius} 外放棄追你並回血。
         </small>
         <button type="button" className="btn" onClick={onBack}>返回</button>
       </div>

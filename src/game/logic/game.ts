@@ -5,7 +5,7 @@ import { reachMilestones, sellAtStall, tickDelivery, type EconomyClock } from '.
 import type { Attacker, Goose, GooseSize, Nest, Pile, Target, Tree, Worker } from './entities'
 import { GOLD, type GameEvent, type Input } from './events'
 import { aggro, forget, updateGoose, type GooseWorld } from './geese'
-import { burnTick, makeHazards, moveMarathon, pushOutOfMarathon, stepShade, stepTrap, type HazardState } from './hazards'
+import { moltTick, makeHazards, moveMarathon, pushOutOfMarathon, stepShade, stepTrap, type HazardState } from './hazards'
 import { newPile, nonEmpty, takeFromPile, workerStash } from './loot'
 import type { GameMap, Point, ZoneId } from './map'
 import { DEFAULT_MAP, dist, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
@@ -84,10 +84,10 @@ export class Game implements GooseWorld, WorkerWorld {
     const dmg = g.size === 'king' ? cfg.king.bite : (g.size === 'big' ? cfg.bigGooseBite : cfg.gooseBite) * g.zone.damageMult
     if (a !== 'player') return this.hurtWorker(a, dmg)
     if (!this.hurtPlayer(dmg) || this.run.dead) return
-    const fx: PeckEffects = g.size === 'king' ? cfg.king : g.size === 'big' ? { poison: cfg.bigGoosePoison } : {}
+    const fx: PeckEffects = g.size === 'king' ? cfg.king : g.size === 'big' ? { scrape: cfg.bigGooseScrape } : {}
     const started = applyPeck(this.status, fx)
-    if (started.poisoned) this.floatAtPlayer(MSG.poisoned, '#9cff6a')
-    if (started.slowed) this.floatAtPlayer(MSG.slowed, '#8fb8ff')
+    if (started.scraped) this.floatAtPlayer(MSG.scraped, '#ff7060')
+    if (started.sprained) this.floatAtPlayer(MSG.sprained, '#8fb8ff')
   }
 
   // --- WorkerWorld ---
@@ -117,7 +117,7 @@ export class Game implements GooseWorld, WorkerWorld {
       this.spawnGoose(at, 'small', nest)
       nest.children++
     }
-    for (const g of this.geese) if (g.burnLeft > 0) this.hit(g, burnTick(g, dt), 'player')
+    for (const g of this.geese) if (g.moltLeft > 0) this.hit(g, moltTick(g, dt), 'player')
     if (this.hazards.marathon) moveMarathon(this.hazards.marathon, dt)
     this.updateEconomy(dt)
     this.trackZone()
@@ -189,7 +189,7 @@ export class Game implements GooseWorld, WorkerWorld {
     if (target.hp > 0) {
       if (target.kind !== 'goose') return
       aggro(target, by)
-      if (by === 'player' && this.status.burnAbilityLeft > 0 && target.burnLeft <= 0) target.burnLeft = TRAPS.roast.burn.sec
+      if (by === 'player' && this.status.hypeLeft > 0 && target.moltLeft <= 0) target.moltLeft = TRAPS.drink.molt.sec
       return
     }
     target.alive = false
@@ -206,14 +206,14 @@ export class Game implements GooseWorld, WorkerWorld {
   private updatePlayer(dt: number, move: Point): void {
     const s = this.status
     if (this.run.dead) return
-    if (s.poisonLeft > 0) {
-      s.poisonLeft -= dt
-      if (this.drain(s.poisonDps * dt)) return
+    if (s.scrapeLeft > 0) {
+      s.scrapeLeft -= dt
+      if (this.drain(s.scrapeDps * dt)) return
     }
     tickBuffs(s, dt)
     if (this.updateTrap(dt)) return
-    if (s.lockerLeft > 0) {
-      s.lockerLeft -= dt
+    if (s.rushLeft > 0) {
+      s.rushLeft -= dt
       if (this.drain(TRAPS.locker.drainPerSec * dt)) return
     }
     this.updateShade()
@@ -237,7 +237,7 @@ export class Game implements GooseWorld, WorkerWorld {
 
   private movePlayer(dt: number, move: Point): void {
     const s = this.status
-    const speed = playerSpeed(this.run.levels) * (s.slowLeft > 0 ? s.slowMult : 1) * (s.lockerLeft > 0 ? TRAPS.locker.speedMult : 1)
+    const speed = playerSpeed(this.run.levels) * (s.sprainLeft > 0 ? s.sprainMult : 1) * (s.rushLeft > 0 ? TRAPS.locker.speedMult : 1)
     s.moving = walk(this.player, move, speed, dt, this.map)
     if (s.moving) s.facing = facingOf(move.x, move.y)
   }
@@ -284,7 +284,7 @@ export class Game implements GooseWorld, WorkerWorld {
     }
     if (step.kind === 'released') {
       this.teleport(step.trap.exit)
-      Object.assign(this.status, step.trap.kind === 'locker' ? { lockerLeft: TRAPS.locker.effectSec } : { burnAbilityLeft: TRAPS.roast.abilitySec })
+      Object.assign(this.status, step.trap.kind === 'locker' ? { rushLeft: TRAPS.locker.effectSec } : { hypeLeft: TRAPS.drink.abilitySec })
       this.emit({ type: 'toast', text: MSG.trapLeave(step.trap.kind) })
     }
     return false

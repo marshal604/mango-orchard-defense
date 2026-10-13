@@ -9,6 +9,6 @@ export const emptyMap = (): GameMap => ({
   })),
   shades: [],
   lockers: [],
-  roasts: [],
+  drinks: [],
   marathonPath: [],
 })

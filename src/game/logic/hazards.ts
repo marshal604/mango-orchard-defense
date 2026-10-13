@@ -3,7 +3,7 @@ import type { Goose } from './entities'
 import type { GameMap, Point } from './map'
 import { dist } from './map'
 
-export interface Trap { kind: 'locker' | 'roast'; left: number; exit: Point; at: Point }
+export interface Trap { kind: 'locker' | 'drink'; left: number; exit: Point; at: Point }
 
 export interface Marathon {
   path: Point[]
@@ -19,8 +19,8 @@ export interface HazardState {
   armed: boolean
   shaded: boolean
   donated: number
-  lockerLeft: number
-  burnAbilityLeft: number
+  rushLeft: number
+  hypeLeft: number
   marathon: Marathon | null
 }
 
@@ -48,7 +48,7 @@ export function makeHazards(map: GameMap): HazardState {
   const marathon: Marathon | null = path.length >= 2
     ? { path, total, s: MARATHON.length, dir: 1, head: pointAt(path, MARATHON.length) }
     : null
-  return { trapped: null, armed: true, shaded: false, donated: 0, lockerLeft: 0, burnAbilityLeft: 0, marathon }
+  return { trapped: null, armed: true, shaded: false, donated: 0, rushLeft: 0, hypeLeft: 0, marathon }
 }
 
 export const underShade = (map: GameMap, p: Point) => map.shades.some((s) => dist(p, s) <= SHADE.radius)
@@ -62,9 +62,9 @@ export function trapAt(map: GameMap, p: Point): Trap | null {
       return { kind: 'locker', left: TRAPS.locker.lockSec, at: l, exit: { x: l.x, y: r.y + r.h + 24 } }
     }
   }
-  for (const r of map.roasts) {
-    if (dist(p, r) <= TRAPS.roast.radius) {
-      return { kind: 'roast', left: TRAPS.roast.lockSec, at: r, exit: { x: r.x, y: r.y + TRAPS.roast.radius + 24 } }
+  for (const r of map.drinks) {
+    if (dist(p, r) <= TRAPS.drink.radius) {
+      return { kind: 'drink', left: TRAPS.drink.lockSec, at: r, exit: { x: r.x, y: r.y + TRAPS.drink.radius + 24 } }
     }
   }
   return null
@@ -92,10 +92,10 @@ export function pushOutOfMarathon(m: Marathon, p: Point): Point | null {
   return { x: p.x - head.dy * push, y: p.y + head.dx * push }
 }
 
-export function burnTick(g: Goose, dt: number): number {
-  if (g.burnLeft <= 0 || !g.alive) return 0
-  g.burnLeft -= dt
-  return TRAPS.roast.burn.dps * dt
+export function moltTick(g: Goose, dt: number): number {
+  if (g.moltLeft <= 0 || !g.alive) return 0
+  g.moltLeft -= dt
+  return TRAPS.drink.molt.dps * dt
 }
 
 export type TrapStep =
