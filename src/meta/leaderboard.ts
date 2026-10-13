@@ -25,6 +25,10 @@ export function topRecords(store: Store, d: Difficulty): RunRecord[] {
 export function addRecord(store: Store, d: Difficulty, record: RunRecord): number {
   const withDate = { ...record, date: record.date ?? new Date().toISOString().slice(0, 10) }
   const board = [...topRecords(store, d), withDate].sort((a, b) => a.time - b.time)
-  store.setItem(KEY(d), JSON.stringify(board.slice(0, LIMIT)))
+  try {
+    store.setItem(KEY(d), JSON.stringify(board.slice(0, LIMIT)))
+  } catch {
+    // Storage full or blocked (private mode): the rank is still shown, it just is not remembered.
+  }
   return board.indexOf(withDate) + 1
 }

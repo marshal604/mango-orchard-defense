@@ -62,7 +62,11 @@ export class TrophyTracker {
     const fresh = TROPHIES.filter((t) => !this.owned.has(t.id) && t.earned(g))
     if (fresh.length === 0) return []
     for (const t of fresh) this.owned.add(t.id)
-    this.store.setItem(KEY, JSON.stringify([...this.owned]))
+    try {
+      this.store.setItem(KEY, JSON.stringify([...this.owned]))
+    } catch {
+      // Storage blocked: trophies still show this run, they are just not remembered.
+    }
     return fresh
   }
 }

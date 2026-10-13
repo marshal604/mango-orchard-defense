@@ -28,3 +28,10 @@ describe('local leaderboard', () => {
     expect(topRecords(store, 'normal')).toEqual([])
   })
 })
+
+describe('leaderboard storage failures', () => {
+  it('still reports a rank when the browser refuses to store it', () => {
+    const store = { getItem: () => null, setItem: () => { throw new Error('QuotaExceededError') } }
+    expect(addRecord(store, 'normal', { nickname: 'A', time: 100 })).toBe(1)
+  })
+})

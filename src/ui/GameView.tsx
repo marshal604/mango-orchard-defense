@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
-import { dprOf, WorldScene, type GuideTarget } from '../game/scene'
+import { WorldScene, type GuideTarget } from '../game/scene'
+import { dprOf } from '../game/sprites'
 import type { Game, GameEvent } from '../game/logic/game'
 
 interface Props {
@@ -54,7 +55,7 @@ export function GameView({ game, paused, onEvents, guide, cover }: Props) {
       window.addEventListener('resize', onResize)
     })
     if (import.meta.env.DEV) window.__game = game
-    if (import.meta.env.DEV) (window as unknown as { __phaser?: () => Phaser.Game | null }).__phaser = () => phaser
+    if (import.meta.env.DEV) window.__phaser = () => phaser
     return () => {
       cancelled = true
       window.removeEventListener('resize', onResize)

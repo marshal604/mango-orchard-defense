@@ -20,6 +20,8 @@ export interface GuideView {
   panel: GuidePanel | null
   target: Point | null
   targetName: string | null
+  // True when the arrow points at the Monkey King (it hides closer than for buildings).
+  toKing: boolean
   completed: boolean
   // Upgrade the open building menu should highlight.
   suggest: Track | null
@@ -68,14 +70,14 @@ export class Guide {
     while (this.progress < STEPS.length && STEPS[this.progress].done(g)) this.progress++
     const completed = this.progress > before
     const king = { x: g.king.x, y: g.king.y }
-    if (!this.tutorial) return { panel: null, target: king, targetName: '猴王', completed, suggest: affordable(g) }
+    if (!this.tutorial) return { panel: null, target: king, targetName: '猴王', toKing: true, completed, suggest: affordable(g) }
 
     const stall = building(g, 'stall')
     const reminder = this.progress !== 1 && nearFull(g) && g.currentPad() !== 'stall' && g.king.target !== 'player'
     if (reminder) {
       return {
         panel: { step: this.progress + 1, total: TOTAL, title: '背包快滿了！回水果攤賣掉（或等宅配來收）', reminder: true },
-        target: padOf(stall), targetName: stall.name, completed, suggest: null,
+        target: padOf(stall), targetName: stall.name, toKing: false, completed, suggest: null,
       }
     }
     if (this.progress >= STEPS.length) {
@@ -85,14 +87,14 @@ export class Guide {
           step: TOTAL, total: TOTAL, title: '賺錢、升級裝備，打倒猴王',
           detail: '猴王在地圖西南角，跟著金色箭頭走', tip: tipFor(g, suggest),
         },
-        target: king, targetName: '猴王', completed, suggest,
+        target: king, targetName: '猴王', toKing: true, completed, suggest,
       }
     }
     const step = STEPS[this.progress]
-    return { ...this.stepView(g, step), completed, suggest: step.buy?.track ?? null }
+    return { ...this.stepView(g, step), toKing: false, completed, suggest: step.buy?.track ?? null }
   }
 
-  private stepView(g: Game, step: Step): Omit<GuideView, 'completed' | 'suggest'> {
+  private stepView(g: Game, step: Step): Omit<GuideView, 'completed' | 'suggest' | 'toKing'> {
     const panel: GuidePanel = { step: this.progress + 1, total: TOTAL, title: step.title }
     if (this.progress === 0) return { panel: { ...panel, detail: `背包 ${g.run.bagUsed}/${g.run.bagCap}` }, target: null, targetName: null }
     if (this.progress === 1) {

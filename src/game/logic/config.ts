@@ -181,3 +181,6 @@ export const SUGGEST_ORDER: readonly Track[] = [
 ]
 
 export const VIEW = { maxPixelRatio: 2, zoom: 0.7 } as const
+
+// Gold guide arrow hides once the player is this close to its target.
+export const GUIDE = { arrowHideDist: 220, kingHideDist: 280 } as const

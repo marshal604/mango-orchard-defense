@@ -7,7 +7,7 @@ import { padOf, type Point, type ZoneId } from './logic/map'
 import { TRAP_TEXT } from './logic/messages'
 import { sellPrice } from './logic/run'
 import { sfx } from './sfx'
-import { addSprite, createAnims, preloadSprites, type Sprite } from './sprites'
+import { addSprite, createAnims, dprOf, preloadSprites, type Sprite } from './sprites'
 import { flash, PlayerView, textStyle, WorldViews } from './views'
 
 const ZONE_STYLE: Record<ZoneId, { color: number; tile: string }> = {
@@ -27,8 +27,6 @@ export interface SceneHooks {
   // CSS pixels covered by the HUD (top) and an open menu sheet (bottom).
   cover: () => { top: number; bottom: number }
 }
-
-export const dprOf = () => Math.min(window.devicePixelRatio || 1, VIEW.maxPixelRatio)
 
 export class WorldScene extends Phaser.Scene {
   private hooks!: SceneHooks

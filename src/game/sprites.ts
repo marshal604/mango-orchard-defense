@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { TOOLS } from './logic/config'
+import { TOOLS, VIEW } from './logic/config'
 
 // Art is authored at 2x (docs/ui-reference.md 1.5): every sprite is scaled so its height matches DISPLAY.
 export const DISPLAY: Record<string, number> = {
@@ -96,3 +96,6 @@ export function setTextureKeepHeight(s: Sprite, texture: string, displayKey: str
   s.setTexture(texture)
   s.setScale((DISPLAY[displayKey] ?? 48) / s.height)
 }
+
+// Device pixel ratio capped like the original (VIEW.maxPixelRatio) for crisp but affordable canvases.
+export const dprOf = () => Math.min(window.devicePixelRatio || 1, VIEW.maxPixelRatio)

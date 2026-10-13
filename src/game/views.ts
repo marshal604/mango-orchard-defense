@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import type { Game } from './logic/game'
 import type { Den, Monkey, Pile, Tree, Worker } from './logic/entities'
 import { workerInterval } from './logic/workers'
-import { addSprite, characterScale, firstFrame, setTextureKeepHeight, toolArt, type Sprite } from './sprites'
+import { addSprite, characterScale, dprOf, firstFrame, setTextureKeepHeight, toolArt, type Sprite } from './sprites'
 
 // Keeps Phaser sprites in sync with the headless Game and adds the original's hit feedback
 // (docs/feel-reference.md 1: 60 ms white flash, tree wiggle, 200 ms fade, den squash, no hit-stop).
@@ -112,7 +112,10 @@ export class WorldViews {
   wiggleTree(t: Tree) {
     const s = this.sprites.get(t.id)
     if (!s) return
-    this.scene.tweens.add({ targets: s, x: t.x + 2, duration: 40, yoyo: true, repeat: 1, onComplete: () => s.setX(t.x) })
+    // Restart rather than stack, so rapid hits never drift the tree off its spot.
+    this.scene.tweens.killTweensOf(s)
+    s.setX(t.x)
+    this.scene.tweens.add({ targets: s, x: t.x + 2, duration: 40, yoyo: true, repeat: 1 })
   }
 
   private track(id: number, make: () => Sprite) {
@@ -221,5 +224,5 @@ export const FONT = '"Cubic 11", "PingFang TC", "Noto Sans TC", sans-serif'
 
 export const textStyle = (size: number, color: string, stroke = 4): Phaser.Types.GameObjects.Text.TextStyle => ({
   fontFamily: FONT, fontSize: `${size}px`, color, stroke: '#000', strokeThickness: stroke,
-  resolution: Math.min(window.devicePixelRatio || 1, 2),
+  resolution: dprOf(),
 })

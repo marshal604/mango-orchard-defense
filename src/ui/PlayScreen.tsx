@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { BuildingId, Difficulty } from '../game/logic/config'
+import { GUIDE } from '../game/logic/config'
 import type { Notice } from '../game/logic/events'
 import { Game, type GameEvent } from '../game/logic/game'
 import { sfx, startBgm, stopBgm, unlockAudio } from '../game/sfx'
@@ -49,8 +50,11 @@ export function PlayScreen({ nickname, difficulty, onHome }: Props) {
   }, [])
 
   // Guide, trophies and pad polling: 4 times a second is plenty for UI.
+  const hold = holds[0]
+  const halted = phase !== 'play' || paused || !!hold
+
   useEffect(() => {
-    if (phase !== 'play') return
+    if (halted) return
     const id = window.setInterval(() => {
       const next = guide.update(game)
       if (next.completed) sfx.quest()
@@ -66,7 +70,13 @@ export function PlayScreen({ nickname, difficulty, onHome }: Props) {
       }
     }, 250)
     return () => window.clearInterval(id)
-  }, [phase, game, guide, trophies])
+  }, [halted, game, guide, trophies])
+
+  // Music follows the run: silent on intro, countdown, pause, cards and after the win.
+  useEffect(() => {
+    if (halted) stopBgm()
+    else startBgm()
+  }, [halted])
 
   useEffect(() => () => stopBgm(), [])
 
@@ -84,7 +94,6 @@ export function PlayScreen({ nickname, difficulty, onHome }: Props) {
         }
       } else if (e.type === 'win') {
         localStorage.setItem(TUTORIAL_KEY, '1')
-        stopBgm()
         const rank = addRecord(localStorage, difficulty, { nickname, time: e.time })
         setResult({ rank, trophies: trophies.check(game) })
         setPhase('won')
@@ -94,7 +103,7 @@ export function PlayScreen({ nickname, difficulty, onHome }: Props) {
 
   const guideTarget = useCallback((): GuideTarget | null => {
     if (!view.target || !view.targetName) return null
-    return { at: view.target, label: view.targetName, hideWithin: view.targetName === '猴王' ? 280 : 220 }
+    return { at: view.target, label: view.targetName, hideWithin: view.toKing ? GUIDE.kingHideDist : GUIDE.arrowHideDist }
   }, [view])
 
   const cover = useCallback(() => {
@@ -107,20 +116,22 @@ export function PlayScreen({ nickname, difficulty, onHome }: Props) {
     unlockAudio()
     setPhase('countdown')
   }
-  const go = useCallback(() => {
-    setPhase('play')
-    startBgm()
-  }, [])
+  const go = useCallback(() => setPhase('play'), [])
   const again = () => {
-    setGame(new Game({ difficulty, seed: Date.now() % 1e9 }))
+    const next = new Game({ difficulty, seed: Date.now() % 1e9 })
+    setGame(next)
+    setView(new Guide(localStorage.getItem(TUTORIAL_KEY) !== '1').update(next))
     setPhase('intro')
     setResult(null)
     setDead(false)
+    setPaused(false)
     setHolds([])
+    setToasts([])
+    setBanner(null)
+    setPad(null)
+    setClosedPad(null)
   }
 
-  const hold = holds[0]
-  const halted = phase !== 'play' || paused || !!hold
   const hudH = hudRef.current?.offsetHeight ?? 150
   return (
     <div className="run">
