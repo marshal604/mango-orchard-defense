@@ -1,7 +1,8 @@
 import type { BuildingId, Difficulty, Resource, Track } from './config'
-import { BUILDING, COMBAT, ECONOMY, GOOSE, KING, MILESTONES, NEST, PLAYER, TREE } from './config'
+import { BUILDING, COMBAT, ECONOMY, GOOSE, KING, MILESTONES, NEST, PLAYER, SHADE, TRAPS, TREE } from './config'
 import type { Attacker, Goose, GooseSize, Nest, Pile, Target, Tree, Worker } from './entities'
 import { aggro, gooseStats, updateGoose, type GooseWorld } from './geese'
+import { burnTick, makeHazards, moveMarathon, pushOutOfMarathon, trapAt, underShade, type HazardState } from './hazards'
 import type { GameMap, Point, ZoneId } from './map'
 import { DEFAULT_MAP, dist, inSafeArea, padOf, spawnPoint, zoneAt } from './map'
 import { makeRng } from './rng'
@@ -37,6 +38,8 @@ export interface PlayerStatus {
   slowLeft: number
   slowMult: number
   hasteLeft: number
+  burnAbilityLeft: number
+  lockerLeft: number
   invulnerableUntil: number
   lastHurt: number
   attackCd: number
@@ -60,12 +63,13 @@ export class Game implements GooseWorld, WorkerWorld {
   readonly king: Goose
   piles: Pile[] = []
   status: PlayerStatus = {
-    poisonLeft: 0, poisonDps: 0, slowLeft: 0, slowMult: 1, hasteLeft: 0,
+    poisonLeft: 0, poisonDps: 0, slowLeft: 0, slowMult: 1, hasteLeft: 0, burnAbilityLeft: 0, lockerLeft: 0,
     invulnerableUntil: 0, lastHurt: 0, attackCd: 0, swingUntil: 0, facing: 'down', moving: false,
   }
   elapsed = 0
   finished = false
   zone: ZoneId
+  readonly hazards: HazardState
   private sellCd = 0
   private deliveryCd = 0
   private noRacket = false
@@ -84,7 +88,11 @@ export class Game implements GooseWorld, WorkerWorld {
     this.geese = world.geese
     this.nests = world.nests
     this.king = this.spawnGoose(KING.home, 'king')
+    this.hazards = makeHazards(this.map)
   }
+
+  get trapped() { return this.hazards.trapped }
+  get marathon() { return this.hazards.marathon }
 
   // --- GooseWorld ---
   get width() { return this.map.width }
@@ -93,7 +101,7 @@ export class Game implements GooseWorld, WorkerWorld {
   get playerAlive() { return !this.run.dead }
   get sightRadius() { return this.run.cfg.sightRadius }
   isGone = (a: Attacker) => (a === 'player' ? this.run.dead : a.state === 'down')
-  sheltered = (a: Attacker) => a === 'player' && inSafeArea(this.map, this.player)
+  sheltered = (a: Attacker) => a === 'player' && (inSafeArea(this.map, this.player) || this.hazards.shaded)
   bite = (g: Goose, a: Attacker) => {
     const cfg = this.run.cfg
     const dmg = g.size === 'king' ? cfg.king.bite : (g.size === 'big' ? cfg.bigGooseBite : cfg.gooseBite) * g.zone.damageMult
@@ -115,6 +123,8 @@ export class Game implements GooseWorld, WorkerWorld {
     for (const g of this.geese) updateGoose(this, g, dt)
     for (const w of this.workers) updateWorker(this, w, dt)
     this.updateNests(dt)
+    this.updateBurns(dt)
+    if (this.hazards.marathon) moveMarathon(this.hazards.marathon, dt)
     this.updateStall(dt)
     this.updateDelivery(dt)
     this.trackZone()
@@ -202,7 +212,19 @@ export class Game implements GooseWorld, WorkerWorld {
     }
     if (s.hasteLeft > 0) s.hasteLeft -= dt
     if (s.slowLeft > 0) s.slowLeft -= dt
+    if (s.burnAbilityLeft > 0) s.burnAbilityLeft -= dt
+    if (this.updateTrap(dt)) return
+    if (s.lockerLeft > 0) {
+      s.lockerLeft -= dt
+      run.hp -= TRAPS.locker.drainPerSec * dt
+      s.lastHurt = this.elapsed
+      if (run.hp <= 0) return this.die()
+    }
+    this.updateShade()
     this.movePlayer(dt, move)
+    const m = this.hazards.marathon
+    const pushed = m && pushOutOfMarathon(m, this.player)
+    if (pushed) this.teleport(pushed)
     this.attack(dt)
     this.collectPiles()
     this.regen(dt)
@@ -214,7 +236,7 @@ export class Game implements GooseWorld, WorkerWorld {
     if (len === 0) return
     const s = this.status
     s.facing = Math.abs(move.x) > Math.abs(move.y) ? (move.x < 0 ? 'left' : 'right') : (move.y < 0 ? 'up' : 'down')
-    const speed = playerSpeed(this.run.levels) * (s.slowLeft > 0 ? s.slowMult : 1)
+    const speed = playerSpeed(this.run.levels) * (s.slowLeft > 0 ? s.slowMult : 1) * (s.lockerLeft > 0 ? TRAPS.locker.speedMult : 1)
     const scale = (Math.min(1, len) * speed * dt) / len
     this.player.x = clamp(this.player.x + move.x * scale, 10, this.map.width - 10)
     this.player.y = clamp(this.player.y + move.y * scale, 30, this.map.height)
@@ -226,11 +248,77 @@ export class Game implements GooseWorld, WorkerWorld {
     const ok = r.mode === 'outOfCombat'
       ? this.elapsed - this.status.lastHurt >= r.delay
       : inSafeArea(this.map, this.player)
-    if (ok && run.hp < run.hpMax) run.hp = Math.min(run.hpMax, run.hp + r.perSec * dt)
+    const perSec = (ok ? r.perSec : 0) + (this.hazards.shaded ? SHADE.regenPerSec : 0)
+    if (perSec > 0 && run.hp < run.hpMax) run.hp = Math.min(run.hpMax, run.hp + perSec * dt)
+  }
+
+  // --- hazards ---
+  // Returns true while the player is locked inside a trap.
+  private updateTrap(dt: number): boolean {
+    const h = this.hazards
+    const trap = h.trapped
+    if (trap) {
+      trap.left -= dt
+      if (trap.left > 0) return true
+      h.trapped = null
+      this.teleport(trap.exit)
+      if (trap.kind === 'locker') {
+        this.status.lockerLeft = TRAPS.locker.effectSec
+        this.emit({ type: 'toast', text: `換好球衣了！${TRAPS.locker.effectSec} 秒內跑更快，但每秒掉 ${TRAPS.locker.drainPerSec} 滴血` })
+      } else {
+        this.status.burnAbilityLeft = TRAPS.roast.abilitySec
+        this.emit({ type: 'toast', text: `吃飽了！${TRAPS.roast.abilitySec} 秒內打到的鵝會著火` })
+      }
+      return false
+    }
+    const found = trapAt(this.map, this.player)
+    if (!found) {
+      h.armed = true
+      return false
+    }
+    if (!h.armed) return false
+    h.armed = false
+    h.trapped = found
+    this.dropAggro()
+    this.emit({ type: 'toast', text: found.kind === 'locker' ? '誤闖更衣室，被關 5 秒換衣服…' : '被烤鵝攤老闆拉去吃烤鵝，5 秒…' })
+    return true
+  }
+
+  private updateShade(): void {
+    const h = this.hazards
+    const now = underShade(this.map, this.player)
+    if (now && !h.shaded) {
+      this.dropAggro()
+      if (h.donated < SHADE.freeAfter) {
+        const fee = this.run.money
+        this.run.money = 0
+        h.donated += fee
+        this.emit({
+          type: 'notice', tone: 'info', title: '遮陽棚',
+          lines: ['遮陽棚是球友會募款搭的，進來要捐出身上所有現金', `（捐了 $${fee}，累積 $${h.donated}／$${SHADE.freeAfter}，滿額後免費）`, `在棚下每秒回 ${SHADE.regenPerSec} 滴血、鵝不會追你`],
+        })
+      }
+    }
+    h.shaded = now
+  }
+
+  private dropAggro(): void {
+    for (const g of this.geese) {
+      if (g.target !== 'player') continue
+      g.target = null
+      g.state = g.size === 'king' ? 'return' : 'wander'
+    }
+  }
+
+  private updateBurns(dt: number): void {
+    for (const g of this.geese) {
+      const dmg = burnTick(g, dt)
+      if (dmg > 0) this.hit(g, dmg, 'player')
+    }
   }
 
   private hurtPlayer(dmg: number): boolean {
-    if (this.run.dead || this.elapsed < this.status.invulnerableUntil) return false
+    if (this.run.dead || this.hazards.trapped || this.elapsed < this.status.invulnerableUntil) return false
     this.run.hp -= dmg
     this.status.lastHurt = this.elapsed
     this.emit({ type: 'hit', target: 'player' })
@@ -257,13 +345,9 @@ export class Game implements GooseWorld, WorkerWorld {
     run.hp = 0
     run.dead = true
     run.stats.deaths++
-    Object.assign(this.status, { poisonLeft: 0, slowLeft: 0, swingUntil: 0 })
-    for (const g of this.geese) {
-      if (g.target === 'player') {
-        g.target = null
-        g.state = g.size === 'king' ? 'return' : 'wander'
-      }
-    }
+    Object.assign(this.status, { poisonLeft: 0, slowLeft: 0, swingUntil: 0, lockerLeft: 0 })
+    this.hazards.trapped = null
+    this.dropAggro()
     this.emit({ type: 'dead' })
   }
 
@@ -320,7 +404,9 @@ export class Game implements GooseWorld, WorkerWorld {
     target.hp -= damage
     this.emit({ type: 'hit', target })
     if (target.hp > 0) {
-      if (target.kind === 'goose') aggro(target, by)
+      if (target.kind !== 'goose') return
+      aggro(target, by)
+      if (by === 'player' && this.status.burnAbilityLeft > 0 && target.burnLeft <= 0) target.burnLeft = TRAPS.roast.burn.sec
       return
     }
     target.alive = false

@@ -30,6 +30,8 @@ export class WorldScene extends Phaser.Scene {
   private stumped = new Set<number>()
   private customers: CustomerQueue | null = null
   private workerSprites = new Map<Worker, Sprite>()
+  private runners: Sprite[] = []
+  private trapLabel!: Phaser.GameObjects.Text
 
   constructor() {
     super('world')
@@ -54,6 +56,15 @@ export class WorldScene extends Phaser.Scene {
       this.add.text(b.x, b.y - b.h / 2 - 10, b.name, { fontSize: '20px', color: '#f8f8f8', stroke: '#000', strokeThickness: 4 })
         .setOrigin(0.5, 1).setDepth(1e6)
     }
+    for (const p of game.map.shades) addSprite(this, 'shade_tent', p.x, p.y + 20).setDepth(p.y + 20)
+    for (const p of game.map.lockers) addSprite(this, 'locker_room', p.x, p.y + 35).setDepth(p.y + 35)
+    for (const p of game.map.roasts) addSprite(this, 'roast_stand', p.x, p.y + 20).setDepth(p.y + 20)
+    if (game.marathon) {
+      const kinds = ['customer_a', 'customer_b', 'customer_c']
+      this.runners = Array.from({ length: 18 }, (_, i) => addSprite(this, kinds[i % 3], 0, 0))
+    }
+    this.trapLabel = this.add.text(0, 0, '', { fontSize: '22px', color: '#f8b800', stroke: '#000', strokeThickness: 4 })
+      .setOrigin(0.5, 1).setDepth(1e6)
     const stall = game.map.buildings.find((b) => b.id === 'stall')
     if (stall) this.customers = new CustomerQueue(this, padOf(stall))
     this.player = addSprite(this, 'player', game.player.x, game.player.y)
@@ -95,7 +106,10 @@ export class WorldScene extends Phaser.Scene {
     const s = game.status
     const bob = s.moving ? Math.abs(Math.sin(game.elapsed * 14)) * 4 : 0
     p.setPosition(game.player.x, game.player.y - bob).setDepth(game.player.y)
-    p.setAlpha(game.run.dead ? 0.4 : 1)
+    p.setAlpha(game.run.dead ? 0.4 : 1).setVisible(!game.trapped)
+    const trap = game.trapped
+    this.trapLabel.setVisible(!!trap)
+    if (trap) this.trapLabel.setText(`${trap.kind === 'locker' ? '換衣中' : '吃烤鵝'} ${Math.ceil(trap.left)}`).setPosition(trap.at.x, trap.at.y - 80)
     if (p instanceof Phaser.GameObjects.Image) {
       if (s.facing === 'left' || s.facing === 'right') p.setFlipX(s.facing === 'left')
       const swinging = game.elapsed < s.swingUntil
@@ -103,6 +117,8 @@ export class WorldScene extends Phaser.Scene {
       p.setScale(swinging ? base * 1.08 : base, swinging ? base * 0.94 : base)
       if (s.poisonLeft > 0) p.setTint(0x9cff6a)
       else if (s.slowLeft > 0) p.setTint(0x8fb8ff)
+      else if (s.lockerLeft > 0) p.setTint(0xffa060)
+      else if (s.burnAbilityLeft > 0) p.setTint(0xffd060)
       else p.clearTint()
     }
   }
@@ -131,6 +147,7 @@ export class WorldScene extends Phaser.Scene {
     }
     for (const g of game.geese) this.syncGoose(g)
     for (const w of game.workers) this.syncWorker(w)
+    this.syncMarathon()
     const live = new Set(game.piles.map((p) => p.id))
     for (const p of game.piles) {
       this.track(p.id, () => addSprite(this, p.feather > 0 ? 'icon_feather' : 'icon_cork', p.x, p.y).setDepth(p.y - 1).setData('pile', true))
@@ -158,6 +175,23 @@ export class WorldScene extends Phaser.Scene {
     if (sprite instanceof Phaser.GameObjects.Image) sprite.setFlipX(g.facingRight)
   }
 
+  private syncMarathon() {
+    const m = this.hooks.game.marathon
+    if (!m) return
+    const [a, b] = [m.path[0], m.path[m.path.length - 1]]
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+    const dir = { x: ((b.x - a.x) / len) * m.dir, y: ((b.y - a.y) / len) * m.dir }
+    const t = this.hooks.game.elapsed
+    this.runners.forEach((r, i) => {
+      const back = Math.floor(i / 2) * 85 + 20
+      const side = i % 2 === 0 ? -14 : 14
+      const x = m.head.x - dir.x * back - dir.y * side
+      const y = m.head.y - dir.y * back + dir.x * side - Math.abs(Math.sin(t * 12 + i)) * 4
+      r.setPosition(x, y).setDepth(y)
+      if (r instanceof Phaser.GameObjects.Image) r.setFlipX(dir.x < 0)
+    })
+  }
+
   private syncWorker(w: Worker) {
     let s = this.workerSprites.get(w)
     if (!s) {
@@ -178,7 +212,7 @@ export class WorldScene extends Phaser.Scene {
       g.fillStyle(0x000000, 0.7).fillRect(x - w / 2 - 2, y - 2, w + 4, 10)
       g.fillStyle(color, 1).fillRect(x - w / 2, y, w * Math.max(0, ratio), 6)
     }
-    bar(game.player.x, game.player.y - 72, 48, game.run.hp / game.run.hpMax, 0x5cd85c)
+    if (!game.trapped) bar(game.player.x, game.player.y - 72, 48, game.run.hp / game.run.hpMax, 0x5cd85c)
     for (const n of game.nests) if (n.alive && n.hp < 13) bar(n.x, n.y - 70, 48, n.hp / 13, 0xd84c4c)
   }
 
