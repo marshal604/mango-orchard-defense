@@ -48,6 +48,8 @@ test('title -> intro -> countdown -> move -> harvest -> sell -> beat the Monkey 
 
   await page.evaluate(() => {
     const g = window.__game!
+    // Wild monkeys chasing the player take target priority over the King; clear them for a deterministic finish.
+    for (const m of g.monkeys) if (m.size !== 'king') m.alive = false
     g.king.hp = 1
     g.teleport({ x: g.king.x + 30, y: g.king.y })
   })
