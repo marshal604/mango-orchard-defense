@@ -3,7 +3,7 @@ import { ECONOMY, SUGGEST_ORDER, UPGRADES } from '../game/logic/config'
 import type { Game } from '../game/logic/game'
 import type { Point } from '../game/logic/map'
 import { dist, padOf } from '../game/logic/map'
-import { racketOf } from '../game/logic/run'
+import { toolOf } from '../game/logic/run'
 
 export type Goal =
   | { kind: 'sell'; text: string; target: Point }
@@ -11,13 +11,13 @@ export type Goal =
   | { kind: 'king'; text: string; target: Point }
   | { kind: 'gather'; text: string; target: Point | null }
 
-const READY_FOR_KING = { racket: 3, armor: 2 }
+const READY_FOR_KING = { tool: 3, armor: 2 }
 
 function nearestHarvest(game: Game): Point | null {
-  const canBig = racketOf(game.run.levels)?.canBigTree ?? false
+  const canBig = toolOf(game.run.levels)?.canBigTree ?? false
   const options = [
     ...game.trees.filter((t) => t.alive && (canBig || !t.big)),
-    ...game.geese.filter((g) => g.alive && g.size !== 'king' && g.zone.id === game.zone),
+    ...game.monkeys.filter((g) => g.alive && g.size !== 'king' && g.zone.id === game.zone),
   ]
   let best: Point | null = null
   let bestD = Infinity
@@ -39,8 +39,8 @@ export function nextGoal(game: Game): Goal {
     const stall = padFor('stall')
     return { kind: 'sell', text: `背包快滿了，回${stall.name}賣掉`, target: stall.target }
   }
-  if (run.levels.racket >= READY_FOR_KING.racket && run.levels.armor >= READY_FOR_KING.armor) {
-    return { kind: 'king', text: '裝備夠了！去西南濕地打倒鵝王', target: { x: game.king.x, y: game.king.y } }
+  if (run.levels.tool >= READY_FOR_KING.tool && run.levels.armor >= READY_FOR_KING.armor) {
+    return { kind: 'king', text: '裝備夠了！去西南深山打倒猴王', target: { x: game.king.x, y: game.king.y } }
   }
   const track = SUGGEST_ORDER.find((t) => run.price(t) !== null)
   const price = track ? run.price(track) : null
@@ -49,5 +49,5 @@ export function nextGoal(game: Game): Goal {
     return { kind: 'buy', track, text: `去${b.name}買「${UPGRADES[track].name}」（$${price}）`, target: b.target }
   }
   const need = track && price !== null ? `，還差 $${price - run.money} 買「${UPGRADES[track].name}」` : ''
-  return { kind: 'gather', text: `砍樹、趕鵝賺錢${need}`, target: nearestHarvest(game) }
+  return { kind: 'gather', text: `採芒果、趕猴子賺錢${need}`, target: nearestHarvest(game) }
 }

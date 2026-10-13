@@ -1,14 +1,14 @@
 import { DEFAULT_MAP, type GameMap } from './map'
 
-// Default layout with no procedural trees / geese / nests, so tests place exactly what they need.
+// Default layout with no procedural trees / monkeys / dens, so tests place exactly what they need.
 export const emptyMap = (): GameMap => ({
   ...DEFAULT_MAP,
   zones: DEFAULT_MAP.zones.map((z) => ({
     ...z,
-    counts: { smallTree: 0, bigTree: 0, goose: 0, bigGoose: 0, nest: 0 },
+    counts: { smallTree: 0, bigTree: 0, monkey: 0, bigMonkey: 0, den: 0 },
   })),
-  shades: [],
-  lockers: [],
-  drinks: [],
-  marathonPath: [],
+  pavilions: [],
+  iceShops: [],
+  chiliFields: [],
+  processionPath: [],
 })

@@ -8,18 +8,18 @@ const newGame = (difficulty: 'normal' | 'hell' = 'normal') => new Game({ difficu
 const run = (game: Game, seconds: number) => {
   for (let t = 0; t < seconds; t += 0.05) game.step(0.05, idle)
 }
-const club = (game: Game) => padOf(game.map.buildings.find((b) => b.id === 'clubhouse')!)
+const club = (game: Game) => padOf(game.map.buildings.find((b) => b.id === 'coop')!)
 const FAR = { x: 4500, y: 300 }
 
-describe('ball boys', () => {
-  it('are hired at the club house, fell the nearest small tree and sell the cork at the stall', () => {
+describe('fruit pickers', () => {
+  it('are hired at the coop, harvest the nearest small tree and sell the mango at the stall', () => {
     const game = newGame()
     game.teleport(FAR)
     const c = club(game)
     const tree = game.spawnTree({ x: c.x + 200, y: c.y }, false)
     const oak = game.spawnTree({ x: c.x + 100, y: c.y }, true)
     game.run.money = 120
-    game.buy('ballboy')
+    game.buy('picker')
     expect(game.workers).toHaveLength(1)
     run(game, 30)
     expect(tree.alive).toBe(false)
@@ -34,8 +34,8 @@ describe('ball boys', () => {
     game.spawnTree({ x: c.x + 150, y: c.y }, false)
     game.spawnTree({ x: c.x - 150, y: c.y }, false)
     game.run.money = 1000
-    game.buy('ballboy')
-    game.buy('ballboy')
+    game.buy('picker')
+    game.buy('picker')
     run(game, 0.1)
     const [a, b] = game.workers
     expect(a.target).not.toBeNull()
@@ -49,7 +49,7 @@ describe('ball boys', () => {
       game.teleport(FAR)
       const c = club(game)
       game.run.money = 10_000
-      game.buy('ballboy')
+      game.buy('picker')
       for (let i = 0; i < tool; i++) game.buy('workerTool')
       game.spawnTree({ x: c.x + 40, y: c.y }, false)
       let t = 0
@@ -63,27 +63,27 @@ describe('ball boys', () => {
   })
 })
 
-describe('goose wranglers', () => {
-  it('hunt geese but not the Goose King', () => {
+describe('monkey rangers', () => {
+  it('hunt monkeys but not the Monkey King', () => {
     const game = newGame()
     game.teleport(FAR)
     const c = club(game)
-    const goose = game.spawnGoose({ x: c.x + 120, y: c.y }, 'small')
-    const king = game.spawnGoose({ x: c.x - 80, y: c.y }, 'king')
+    const monkey = game.spawnMonkey({ x: c.x + 120, y: c.y }, 'small')
+    const king = game.spawnMonkey({ x: c.x - 80, y: c.y }, 'king')
     game.run.money = 150
-    game.buy('wrangler')
+    game.buy('ranger')
     run(game, 15)
-    expect(goose.alive).toBe(false)
+    expect(monkey.alive).toBe(false)
     expect(king.hp).toBe(king.hpMax)
   })
 
-  it('can be knocked down by geese on hell and come back after 10 s', () => {
+  it('can be knocked down by monkeys on hell and come back after 10 s', () => {
     const game = newGame('hell')
     game.teleport(FAR)
     const c = club(game)
-    game.spawnGoose({ x: c.x + 300, y: c.y + 300 }, 'big')
+    game.spawnMonkey({ x: c.x + 300, y: c.y + 300 }, 'big')
     game.run.money = 1000
-    game.buy('wrangler')
+    game.buy('ranger')
     const w = game.workers[0]
     let wentDown = false
     for (let t = 0; t < 40 && !wentDown; t += 0.05) {
@@ -102,35 +102,35 @@ describe('delivery', () => {
     game.teleport(FAR)
     game.run.money = 250
     game.buy('delivery')
-    game.run.cork = 4
-    game.run.feather = 1
+    game.run.mango = 4
+    game.run.banana = 1
     run(game, 19.9)
-    expect(game.run.cork).toBe(4)
+    expect(game.run.mango).toBe(4)
     run(game, 0.2)
-    expect(game.run.cork).toBe(0)
+    expect(game.run.mango).toBe(0)
     expect(game.run.money).toBe(28)
   })
 })
 
 describe('milestones', () => {
-  it('give a 20% rally discount after 60 geese', () => {
+  it('give a 20% ranger award discount after 60 monkeys', () => {
     const game = newGame()
     game.teleport(FAR)
-    game.run.stats.geese = 59
-    game.spawnGoose({ x: FAR.x + 10, y: FAR.y }, 'small')
+    game.run.stats.monkeys = 59
+    game.spawnMonkey({ x: FAR.x + 10, y: FAR.y }, 'small')
     game.drainEvents()
     run(game, 3)
     expect(game.run.perks.discount).toBe(true)
-    expect(game.run.price('racket')).toBe(120)
+    expect(game.run.price('tool')).toBe(120)
     expect(game.drainEvents().some((e) => e.type === 'notice')).toBe(true)
   })
 
-  it('trigger park complaints after 100 trees, halving worker speed', () => {
+  it('trigger overwork after 100 trees, halving worker speed', () => {
     const game = newGame()
     game.teleport(FAR)
     game.run.stats.trees = 99
     game.spawnTree({ x: FAR.x + 20, y: FAR.y }, false)
     run(game, 2)
-    expect(game.run.perks.complaints).toBe(true)
+    expect(game.run.perks.overwork).toBe(true)
   })
 })

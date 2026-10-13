@@ -1,7 +1,7 @@
 import type { Resource } from './config'
 import { ECONOMY, MILESTONES } from './config'
 import type { Notice } from './events'
-import { complaintsNotice, discountNotice } from './messages'
+import { overworkNotice, discountNotice } from './messages'
 import type { RunState } from './run'
 import { sellInterval } from './run'
 
@@ -29,7 +29,7 @@ export function sellAtStall(run: RunState, clock: EconomyClock, dt: number, onSt
 export function tickDelivery(run: RunState, clock: EconomyClock, dt: number): number | null {
   if (run.levels.delivery <= 0 || run.dead) return null
   clock.deliveryCd += dt
-  const every = ECONOMY.deliveryEvery * (run.perks.complaints ? MILESTONES.complaintsDeliveryMult : 1)
+  const every = ECONOMY.deliveryEvery * (run.perks.overwork ? MILESTONES.overworkDeliveryMult : 1)
   if (clock.deliveryCd < every) return null
   clock.deliveryCd = 0
   if (run.bagUsed <= 0) return null
@@ -39,13 +39,13 @@ export function tickDelivery(run: RunState, clock: EconomyClock, dt: number): nu
 // Unlocks milestone perks once their thresholds are crossed; returns the notices to show.
 export function reachMilestones(run: RunState): Notice[] {
   const out: Notice[] = []
-  if (!run.perks.discount && run.stats.geese >= MILESTONES.geeseForDiscount) {
+  if (!run.perks.discount && run.stats.monkeys >= MILESTONES.monkeysForDiscount) {
     run.perks = { ...run.perks, discount: true }
     out.push(discountNotice)
   }
-  if (!run.perks.complaints && run.stats.trees >= MILESTONES.treesForComplaints) {
-    run.perks = { ...run.perks, complaints: true }
-    out.push(complaintsNotice)
+  if (!run.perks.overwork && run.stats.trees >= MILESTONES.treesForOverwork) {
+    run.perks = { ...run.perks, overwork: true }
+    out.push(overworkNotice)
   }
   return out
 }

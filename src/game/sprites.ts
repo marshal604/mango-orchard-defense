@@ -3,37 +3,36 @@ import Phaser from 'phaser'
 // Texture key -> display height in world px. Keys match files in public/assets/<key>.png.
 export const DISPLAY: Record<string, number> = {
   player: 56,
-  ballboy: 52,
-  wrangler: 52,
+  picker: 52,
+  ranger: 52,
   customer_a: 52,
   customer_b: 52,
   customer_c: 52,
-  goose: 24,
-  big_goose: 40,
-  goose_king: 88,
-  goose_nest: 56,
-  cork_tree: 64,
-  cork_oak: 104,
-  stump: 36,
+  monkey: 24,
+  big_monkey: 40,
+  monkey_king: 88,
+  monkey_den: 56,
+  fruit_tree: 64,
+  old_tree: 104,
+  picked_tree: 64,
   stall: 110,
-  clubhouse: 110,
-  proshop: 110,
-  supply: 110,
-  shade_tent: 60,
-  locker_room: 70,
-  drink_stand: 70,
-  icon_cork: 20,
-  icon_feather: 20,
-  shuttle: 16,
+  coop: 110,
+  toolshop: 110,
+  grocery: 110,
+  pavilion: 60,
+  ice_shop: 70,
+  chili_field: 70,
+  icon_mango: 20,
+  icon_banana: 20,
 }
 
 const FALLBACK_COLOR: Record<string, number> = {
-  player: 0xffffff, ballboy: 0x3c8cf0, wrangler: 0x3cc86c, goose: 0xf8f8f8, big_goose: 0xa8a8b8,
-  goose_king: 0xf8b800, goose_nest: 0x8c6c3c, cork_tree: 0x2c8c3c, cork_oak: 0x1c6c2c, stump: 0x8c5c2c,
-  icon_cork: 0xc89c5c, icon_feather: 0xffffff,
+  player: 0xffffff, picker: 0x3c8cf0, ranger: 0x3cc86c, monkey: 0xf8f8f8, big_monkey: 0xa8a8b8,
+  monkey_king: 0xf8b800, monkey_den: 0x8c6c3c, fruit_tree: 0x2c8c3c, old_tree: 0x1c6c2c, picked_tree: 0x2c8c3c,
+  icon_mango: 0xc89c5c, icon_banana: 0xffffff,
 }
 
-export const TILE_KEYS = ['tile_park', 'tile_lake', 'tile_wetland', 'tile_arena'] as const
+export const TILE_KEYS = ['tile_village', 'tile_hills', 'tile_deep', 'tile_town'] as const
 
 export function preloadSprites(scene: Phaser.Scene) {
   const base = import.meta.env.BASE_URL
@@ -53,7 +52,7 @@ export function addSprite(scene: Phaser.Scene, key: string, x: number, y: number
     return img
   }
   const color = FALLBACK_COLOR[key] ?? 0xff00ff
-  if (key.startsWith('icon') || key.includes('goose')) {
+  if (key.startsWith('icon') || key.includes('monkey')) {
     return scene.add.circle(x, y, h / 2, color).setOrigin(0.5, 1).setStrokeStyle(2, 0x1c1c1c)
   }
   return scene.add.rectangle(x, y, h * 0.8, h, color).setOrigin(0.5, 1).setStrokeStyle(2, 0x1c1c1c)

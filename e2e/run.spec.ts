@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 // Drives one full run through the real UI. window.__game (dev only) is used to skip the grind.
-test('title -> start -> move -> gather -> sell -> beat the Goose King', async ({ page }) => {
+test('title -> start -> move -> gather -> sell -> beat the Monkey King', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: '開始遊戲' }).click()
   await page.getByLabel('輸入暱稱').fill('測試員')
@@ -22,7 +22,7 @@ test('title -> start -> move -> gather -> sell -> beat the Goose King', async ({
     g.teleport({ x: 1000, y: 600 })
     g.spawnTree({ x: 1030, y: 600 }, false)
   })
-  await expect.poll(() => page.evaluate(() => window.__game!.run.cork), { timeout: 5000 }).toBeGreaterThan(0)
+  await expect.poll(() => page.evaluate(() => window.__game!.run.mango), { timeout: 5000 }).toBeGreaterThan(0)
 
   await page.evaluate(() => {
     const g = window.__game!

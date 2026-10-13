@@ -1,13 +1,13 @@
 import type { Point } from './map'
 
 export interface PlayerStatus {
-  scrapeLeft: number
-  scrapeDps: number
+  scratchLeft: number
+  scratchDps: number
   sprainLeft: number
   sprainMult: number
   hasteLeft: number
-  hypeLeft: number
-  rushLeft: number
+  chiliLeft: number
+  bellyacheLeft: number
   invulnerableUntil: number
   lastHurt: number
   attackCd: number
@@ -17,21 +17,21 @@ export interface PlayerStatus {
 }
 
 export const freshStatus = (): PlayerStatus => ({
-  scrapeLeft: 0, scrapeDps: 0, sprainLeft: 0, sprainMult: 1, hasteLeft: 0, hypeLeft: 0, rushLeft: 0,
+  scratchLeft: 0, scratchDps: 0, sprainLeft: 0, sprainMult: 1, hasteLeft: 0, chiliLeft: 0, bellyacheLeft: 0,
   invulnerableUntil: 0, lastHurt: 0, attackCd: 0, swingUntil: 0, facing: 'down', moving: false,
 })
 
 export function tickBuffs(s: PlayerStatus, dt: number): void {
   if (s.hasteLeft > 0) s.hasteLeft -= dt
   if (s.sprainLeft > 0) s.sprainLeft -= dt
-  if (s.hypeLeft > 0) s.hypeLeft -= dt
+  if (s.chiliLeft > 0) s.chiliLeft -= dt
 }
 
-// Deeper scrape wins; duration extends. Returns true when the player was not already bleeding.
-export function addScrape(s: PlayerStatus, dps: number, sec: number): boolean {
-  const fresh = s.scrapeLeft <= 0
-  s.scrapeDps = fresh ? dps : Math.max(s.scrapeDps, dps)
-  s.scrapeLeft = Math.max(s.scrapeLeft, sec)
+// Deeper scratch wins; duration extends. Returns true when the player was not already bleeding.
+export function addScratch(s: PlayerStatus, dps: number, sec: number): boolean {
+  const fresh = s.scratchLeft <= 0
+  s.scratchDps = fresh ? dps : Math.max(s.scratchDps, dps)
+  s.scratchLeft = Math.max(s.scratchLeft, sec)
   return fresh
 }
 
@@ -46,14 +46,14 @@ export const facingOf = (x: number, y: number): PlayerStatus['facing'] =>
   Math.abs(x) > Math.abs(y) ? (x < 0 ? 'left' : 'right') : (y < 0 ? 'up' : 'down')
 
 export interface PeckEffects {
-  scrape?: { dps: number; sec: number }
+  scratch?: { dps: number; sec: number }
   sprain?: { mult: number; sec: number }
 }
 
 // Applies a peck's lingering effects; returns which ones newly started (for floating text).
-export function applyPeck(s: PlayerStatus, fx: PeckEffects): { scraped: boolean; sprained: boolean } {
+export function applyPeck(s: PlayerStatus, fx: PeckEffects): { scratched: boolean; sprained: boolean } {
   return {
-    scraped: fx.scrape ? addScrape(s, fx.scrape.dps, fx.scrape.sec) : false,
+    scratched: fx.scratch ? addScratch(s, fx.scratch.dps, fx.scratch.sec) : false,
     sprained: fx.sprain ? addSprain(s, fx.sprain.mult, fx.sprain.sec) : false,
   }
 }
@@ -69,5 +69,5 @@ export function walk(p: Point, move: Point, speed: number, dt: number, world: { 
 }
 
 export function clearAilments(s: PlayerStatus): void {
-  Object.assign(s, { scrapeLeft: 0, sprainLeft: 0, swingUntil: 0, rushLeft: 0 })
+  Object.assign(s, { scratchLeft: 0, sprainLeft: 0, swingUntil: 0, bellyacheLeft: 0 })
 }

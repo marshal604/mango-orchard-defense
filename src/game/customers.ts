@@ -21,7 +21,7 @@ export class CustomerQueue {
   sale(kind: Resource, from: Point) {
     const front = this.queue[0]
     if (!front) return
-    const icon = addSprite(this.scene, kind === 'feather' ? 'icon_feather' : 'icon_cork', from.x, from.y - 30).setDepth(1e6)
+    const icon = addSprite(this.scene, kind === 'banana' ? 'icon_banana' : 'icon_mango', from.x, from.y - 30).setDepth(1e6)
     this.scene.tweens.add({ targets: icon, x: front.sprite.x, y: front.sprite.y - 30, duration: 140, onComplete: () => icon.destroy() })
     front.bought++
     if (front.bought < QUEUE.buysEach) return

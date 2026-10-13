@@ -1,6 +1,6 @@
-# Shuttle Tycoon
+# 芒果園保衛戰 (repo: shuttle-tycoon)
 
-Badminton-themed top-down gather / sell / upgrade / boss game. See `CLAUDE.md`.
+Orchard-vs-macaques top-down gather / sell / upgrade / boss game (芒果園保衛戰). See `CLAUDE.md`.
 
 ```
 npm install

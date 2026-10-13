@@ -1,16 +1,16 @@
 import type { Point, Zone } from './map'
 
-export type GooseSize = 'small' | 'big' | 'king'
+export type MonkeySize = 'small' | 'big' | 'king'
 
 export interface Worker {
-  kind: 'ballboy' | 'wrangler'
+  kind: 'picker' | 'ranger'
   x: number
   y: number
   hp: number
   state: 'idle' | 'work' | 'return' | 'down'
-  target: Tree | Goose | null
-  cork: number
-  feather: number
+  target: Tree | Monkey | null
+  mango: number
+  banana: number
   cd: number
   downLeft: number
   idleTo: Point | null
@@ -31,12 +31,12 @@ export interface Tree {
   lockedBy: Worker | null
 }
 
-export interface Goose {
-  kind: 'goose'
+export interface Monkey {
+  kind: 'monkey'
   id: number
   x: number
   y: number
-  size: GooseSize
+  size: MonkeySize
   hp: number
   hpMax: number
   alive: boolean
@@ -47,15 +47,15 @@ export interface Goose {
   wanderTo: Point | null
   pauseLeft: number
   biteCd: number
-  moltLeft: number
-  nest: Nest | null
+  spicyLeft: number
+  den: Den | null
   lockedBy: Worker | null
   facingRight: boolean
   biting: boolean
 }
 
-export interface Nest {
-  kind: 'nest'
+export interface Den {
+  kind: 'den'
   id: number
   x: number
   y: number
@@ -67,6 +67,6 @@ export interface Nest {
   respawnLeft: number
 }
 
-export interface Pile { id: number; x: number; y: number; cork: number; feather: number }
+export interface Pile { id: number; x: number; y: number; mango: number; banana: number }
 
-export type Target = Tree | Goose | Nest
+export type Target = Tree | Monkey | Den

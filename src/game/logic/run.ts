@@ -1,19 +1,19 @@
-import type { Difficulty, Racket, Resource, Track } from './config'
-import { COMBAT, DIFFICULTY, ECONOMY, MILESTONES, PLAYER, RACKETS, UPGRADES } from './config'
+import type { Difficulty, Tool, Resource, Track } from './config'
+import { COMBAT, DIFFICULTY, ECONOMY, MILESTONES, PLAYER, TOOLS, UPGRADES } from './config'
 
 export type Levels = Record<Track, number>
 
-export interface Perks { discount: boolean; complaints: boolean }
+export interface Perks { discount: boolean; overwork: boolean }
 
 const zeroLevels = (): Levels => ({
   bag: 0, price: 0, window: 0, delivery: 0,
-  ballboy: 0, wrangler: 0, workerTool: 0, cart: 0,
-  racket: 0, range: 0, shoes: 0, armor: 0,
+  picker: 0, ranger: 0, workerTool: 0, cart: 0,
+  tool: 0, range: 0, shoes: 0, armor: 0,
 })
 
 export const bagCap = (levels: Levels, d: Difficulty) => DIFFICULTY[d].bagBase + levels.bag * ECONOMY.bagPerLevel
 export const hpMaxOf = (levels: Levels, d: Difficulty) => Math.round(DIFFICULTY[d].hpMax * (1 + levels.armor * ECONOMY.hpPerArmor))
-export const racketOf = (levels: Levels): Racket | undefined => RACKETS[levels.racket]
+export const toolOf = (levels: Levels): Tool | undefined => TOOLS[levels.tool]
 export const attackRange = (levels: Levels) => COMBAT.ranges[levels.range]
 export const sellPrice = (kind: Resource, levels: Levels) =>
   Math.round(ECONOMY.price[kind] * (1 + levels.price * ECONOMY.priceBoostPerLevel))
@@ -34,12 +34,12 @@ export class RunState {
   readonly difficulty: Difficulty
   levels: Levels = zeroLevels()
   money = 0
-  cork = 0
-  feather = 0
+  mango = 0
+  banana = 0
   hp: number
   dead = false
-  perks: Perks = { discount: false, complaints: false }
-  stats = { trees: 0, geese: 0, nests: 0, earned: 0, deaths: 0 }
+  perks: Perks = { discount: false, overwork: false }
+  stats = { trees: 0, monkeys: 0, dens: 0, earned: 0, deaths: 0 }
 
   constructor(difficulty: Difficulty) {
     this.difficulty = difficulty
@@ -48,7 +48,7 @@ export class RunState {
 
   get cfg() { return DIFFICULTY[this.difficulty] }
   get bagCap() { return bagCap(this.levels, this.difficulty) }
-  get bagUsed() { return this.cork + this.feather }
+  get bagUsed() { return this.mango + this.banana }
   get bagFree() { return Math.max(0, this.bagCap - this.bagUsed) }
   get hpMax() { return hpMaxOf(this.levels, this.difficulty) }
 
@@ -64,9 +64,9 @@ export class RunState {
     this.stats.earned += amount
   }
 
-  // Sells one item (feathers first); returns what was sold, or null when the bag is empty.
+  // Sells one item (bananas first); returns what was sold, or null when the bag is empty.
   sellOne(): Resource | null {
-    const kind: Resource | null = this.feather > 0 ? 'feather' : this.cork > 0 ? 'cork' : null
+    const kind: Resource | null = this.banana > 0 ? 'banana' : this.mango > 0 ? 'mango' : null
     if (!kind) return null
     this[kind]--
     this.earn(sellPrice(kind, this.levels))
@@ -74,9 +74,9 @@ export class RunState {
   }
 
   sellAll(): number {
-    const total = this.cork * sellPrice('cork', this.levels) + this.feather * sellPrice('feather', this.levels)
-    this.cork = 0
-    this.feather = 0
+    const total = this.mango * sellPrice('mango', this.levels) + this.banana * sellPrice('banana', this.levels)
+    this.mango = 0
+    this.banana = 0
     this.earn(total)
     return total
   }

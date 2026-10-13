@@ -2,18 +2,19 @@ import Phaser from 'phaser'
 import { CustomerQueue } from './customers'
 import { PlayerInput } from './input'
 import type { Game, GameEvent } from './logic/game'
-import type { Goose, Worker } from './logic/entities'
+import type { Monkey, Worker } from './logic/entities'
 import { padOf, type Point, type ZoneId } from './logic/map'
+import { TRAP_TEXT } from './logic/messages'
 import { addSprite, preloadSprites, setTexture, type Sprite } from './sprites'
 
 const ZONE_STYLE: Record<ZoneId, { color: number; tile: string }> = {
-  lakeside: { color: 0x2c6c3c, tile: 'tile_lake' },
-  wetland: { color: 0x6b5a3a, tile: 'tile_wetland' },
-  park: { color: 0x4ca83c, tile: 'tile_park' },
-  arena: { color: 0x8c8c9c, tile: 'tile_arena' },
+  hills: { color: 0x2c6c3c, tile: 'tile_hills' },
+  deep: { color: 0x6b5a3a, tile: 'tile_deep' },
+  village: { color: 0x4ca83c, tile: 'tile_village' },
+  town: { color: 0x8c8c9c, tile: 'tile_town' },
 }
 
-const GOOSE_KEY: Record<Goose['size'], string> = { small: 'goose', big: 'big_goose', king: 'goose_king' }
+const MONKEY_KEY: Record<Monkey['size'], string> = { small: 'monkey', big: 'big_monkey', king: 'monkey_king' }
 
 export interface SceneHooks {
   game: Game
@@ -60,10 +61,10 @@ export class WorldScene extends Phaser.Scene {
       this.add.text(b.x, b.y - b.h / 2 - 10, b.name, { fontSize: '20px', color: '#f8f8f8', stroke: '#000', strokeThickness: 4 })
         .setOrigin(0.5, 1).setDepth(1e6)
     }
-    for (const p of game.map.shades) addSprite(this, 'shade_tent', p.x, p.y + 20).setDepth(p.y + 20)
-    for (const p of game.map.lockers) addSprite(this, 'locker_room', p.x, p.y + 35).setDepth(p.y + 35)
-    for (const p of game.map.drinks) addSprite(this, 'drink_stand', p.x, p.y + 20).setDepth(p.y + 20)
-    if (game.marathon) {
+    for (const p of game.map.pavilions) addSprite(this, 'pavilion', p.x, p.y + 20).setDepth(p.y + 20)
+    for (const p of game.map.iceShops) addSprite(this, 'ice_shop', p.x, p.y + 35).setDepth(p.y + 35)
+    for (const p of game.map.chiliFields) addSprite(this, 'chili_field', p.x, p.y + 20).setDepth(p.y + 20)
+    if (game.procession) {
       const kinds = ['customer_a', 'customer_b', 'customer_c']
       this.runners = Array.from({ length: 18 }, (_, i) => addSprite(this, kinds[i % 3], 0, 0))
     }
@@ -115,16 +116,16 @@ export class WorldScene extends Phaser.Scene {
     p.setAlpha(game.run.dead ? 0.4 : 1).setVisible(!game.trapped)
     const trap = game.trapped
     this.trapLabel.setVisible(!!trap)
-    if (trap) this.trapLabel.setText(`${trap.kind === 'locker' ? '換比賽服' : '排隊試喝'} ${Math.ceil(trap.left)}`).setPosition(trap.at.x, trap.at.y - 80)
+    if (trap) this.trapLabel.setText(`${TRAP_TEXT[trap.kind].locked} ${Math.ceil(trap.left)}`).setPosition(trap.at.x, trap.at.y - 80)
     if (p instanceof Phaser.GameObjects.Image) {
       if (s.facing === 'left' || s.facing === 'right') p.setFlipX(s.facing === 'left')
       const swinging = game.elapsed < s.swingUntil
       const base = 56 / p.height
       p.setScale(swinging ? base * 1.08 : base, swinging ? base * 0.94 : base)
-      if (s.scrapeLeft > 0) p.setTint(0xff9080)
+      if (s.scratchLeft > 0) p.setTint(0xff9080)
       else if (s.sprainLeft > 0) p.setTint(0x8fb8ff)
-      else if (s.rushLeft > 0) p.setTint(0xffa060)
-      else if (s.hypeLeft > 0) p.setTint(0xffd060)
+      else if (s.bellyacheLeft > 0) p.setTint(0xffa060)
+      else if (s.chiliLeft > 0) p.setTint(0xffd060)
       else p.clearTint()
     }
   }
@@ -141,22 +142,22 @@ export class WorldScene extends Phaser.Scene {
   private syncWorld() {
     const { game } = this.hooks
     for (const t of game.trees) {
-      const s = this.track(t.id, () => addSprite(this, t.big ? 'cork_oak' : 'cork_tree', t.x, t.y).setDepth(t.y))
+      const s = this.track(t.id, () => addSprite(this, t.big ? 'old_tree' : 'fruit_tree', t.x, t.y).setDepth(t.y))
       if (!t.alive && !this.stumped.has(t.id)) {
         this.stumped.add(t.id)
-        setTexture(this, s, 'stump')
+        setTexture(this, s, 'picked_tree')
         s.setDepth(t.y - 1000)
       }
     }
-    for (const n of game.nests) {
-      this.track(n.id, () => addSprite(this, 'goose_nest', n.x, n.y).setDepth(n.y)).setVisible(n.alive)
+    for (const n of game.dens) {
+      this.track(n.id, () => addSprite(this, 'monkey_den', n.x, n.y).setDepth(n.y)).setVisible(n.alive)
     }
-    for (const g of game.geese) this.syncGoose(g)
+    for (const g of game.monkeys) this.syncGoose(g)
     for (const w of game.workers) this.syncWorker(w)
-    this.syncMarathon()
+    this.syncProcession()
     const live = new Set(game.piles.map((p) => p.id))
     for (const p of game.piles) {
-      this.track(p.id, () => addSprite(this, p.feather > 0 ? 'icon_feather' : 'icon_cork', p.x, p.y).setDepth(p.y - 1).setData('pile', true))
+      this.track(p.id, () => addSprite(this, p.banana > 0 ? 'icon_banana' : 'icon_mango', p.x, p.y).setDepth(p.y - 1).setData('pile', true))
     }
     for (const [id, s] of this.sprites) {
       if (s.getData('pile') && !live.has(id)) {
@@ -166,7 +167,7 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private syncGoose(g: Goose) {
+  private syncGoose(g: Monkey) {
     const s = this.sprites.get(g.id)
     if (!g.alive) {
       if (s && !s.getData('dying')) {
@@ -175,14 +176,14 @@ export class WorldScene extends Phaser.Scene {
       }
       return
     }
-    const sprite = this.track(g.id, () => addSprite(this, GOOSE_KEY[g.size], g.x, g.y))
+    const sprite = this.track(g.id, () => addSprite(this, MONKEY_KEY[g.size], g.x, g.y))
     const hop = g.biting ? Math.abs(Math.sin(this.hooks.game.elapsed * 20)) * 4 : 0
     sprite.setPosition(g.x, g.y - hop).setDepth(g.y)
     if (sprite instanceof Phaser.GameObjects.Image) sprite.setFlipX(g.facingRight)
   }
 
-  private syncMarathon() {
-    const m = this.hooks.game.marathon
+  private syncProcession() {
+    const m = this.hooks.game.procession
     if (!m) return
     const [a, b] = [m.path[0], m.path[m.path.length - 1]]
     const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
@@ -235,7 +236,7 @@ export class WorldScene extends Phaser.Scene {
       g.fillStyle(color, 1).fillRect(x - w / 2, y, w * Math.max(0, ratio), 6)
     }
     if (!game.trapped) bar(game.player.x, game.player.y - 72, 48, game.run.hp / game.run.hpMax, 0x5cd85c)
-    for (const n of game.nests) if (n.alive && n.hp < 13) bar(n.x, n.y - 70, 48, n.hp / 13, 0xd84c4c)
+    for (const n of game.dens) if (n.alive && n.hp < 13) bar(n.x, n.y - 70, 48, n.hp / 13, 0xd84c4c)
   }
 
   private renderEvent(e: GameEvent) {

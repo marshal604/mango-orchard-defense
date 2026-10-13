@@ -3,7 +3,7 @@ import type { BuildingId } from './config'
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface Point { x: number; y: number }
 
-export type ZoneId = 'lakeside' | 'wetland' | 'park' | 'arena'
+export type ZoneId = 'hills' | 'deep' | 'village' | 'town'
 
 export interface Zone {
   id: ZoneId
@@ -12,7 +12,7 @@ export interface Zone {
   rect: Rect
   damageMult: number
   dropMult: number
-  counts: { smallTree: number; bigTree: number; goose: number; bigGoose: number; nest: number }
+  counts: { smallTree: number; bigTree: number; monkey: number; bigMonkey: number; den: number }
 }
 
 export interface Building { id: BuildingId; name: string; x: number; y: number; w: number; h: number }
@@ -22,10 +22,10 @@ export interface GameMap {
   height: number
   zones: Zone[]
   buildings: Building[]
-  shades: Point[]
-  lockers: Point[]
-  drinks: Point[]
-  marathonPath: Point[]
+  pavilions: Point[]
+  iceShops: Point[]
+  chiliFields: Point[]
+  processionPath: Point[]
 }
 
 const W = 4800
@@ -38,36 +38,36 @@ export const DEFAULT_MAP: GameMap = {
   height: H,
   zones: [
     {
-      id: 'lakeside', name: '湖畔', stars: '★★', rect: { x: 0, y: 0, w: W, h: HY },
+      id: 'hills', name: '淺山果園', stars: '★★', rect: { x: 0, y: 0, w: W, h: HY },
       damageMult: 2, dropMult: 2,
-      counts: { smallTree: 110, bigTree: 45, goose: 24, bigGoose: 20, nest: 3 },
+      counts: { smallTree: 110, bigTree: 45, monkey: 24, bigMonkey: 20, den: 3 },
     },
     {
-      id: 'wetland', name: '濕地', stars: '★★★', rect: { x: 0, y: HY, w: VX[0], h: H - HY },
+      id: 'deep', name: '深山猴區', stars: '★★★', rect: { x: 0, y: HY, w: VX[0], h: H - HY },
       damageMult: 3, dropMult: 3,
-      counts: { smallTree: 40, bigTree: 30, goose: 60, bigGoose: 16, nest: 5 },
+      counts: { smallTree: 40, bigTree: 30, monkey: 60, bigMonkey: 16, den: 5 },
     },
     {
-      id: 'park', name: '中央運動公園', stars: '★', rect: { x: VX[0], y: HY, w: VX[1] - VX[0], h: H - HY },
+      id: 'village', name: '果園村', stars: '★', rect: { x: VX[0], y: HY, w: VX[1] - VX[0], h: H - HY },
       damageMult: 1, dropMult: 1,
-      counts: { smallTree: 70, bigTree: 12, goose: 7, bigGoose: 0, nest: 1 },
+      counts: { smallTree: 70, bigTree: 12, monkey: 7, bigMonkey: 0, den: 1 },
     },
     {
-      id: 'arena', name: '球館區', stars: '★☆', rect: { x: VX[1], y: HY, w: W - VX[1], h: H - HY },
+      id: 'town', name: '市郊', stars: '★☆', rect: { x: VX[1], y: HY, w: W - VX[1], h: H - HY },
       damageMult: 1.5, dropMult: 1.5,
-      counts: { smallTree: 45, bigTree: 18, goose: 13, bigGoose: 7, nest: 2 },
+      counts: { smallTree: 45, bigTree: 18, monkey: 13, bigMonkey: 7, den: 2 },
     },
   ],
   buildings: [
-    { id: 'stall', name: '羽球工坊收購攤', x: 2400, y: 2350, w: 220, h: 160 },
-    { id: 'clubhouse', name: '球友會館', x: 2000, y: 2750, w: 220, h: 160 },
-    { id: 'proshop', name: '球拍專賣店', x: 2400, y: 1150, w: 220, h: 160 },
-    { id: 'supply', name: '補給站', x: 4000, y: 2400, w: 220, h: 160 },
+    { id: 'stall', name: '路邊水果攤', x: 2400, y: 2350, w: 220, h: 160 },
+    { id: 'coop', name: '農會', x: 2000, y: 2750, w: 220, h: 160 },
+    { id: 'toolshop', name: '農具行', x: 2400, y: 1150, w: 220, h: 160 },
+    { id: 'grocery', name: '柑仔店', x: 4000, y: 2400, w: 220, h: 160 },
   ],
-  shades: [{ x: 1300, y: 2200 }, { x: 900, y: 2700 }, { x: 3000, y: 900 }, { x: 3700, y: 2900 }],
-  lockers: [{ x: 1800, y: 1900 }, { x: 3500, y: 2000 }],
-  drinks: [{ x: 1100, y: 1000 }],
-  marathonPath: [{ x: 300, y: 1600 }, { x: 4500, y: 1600 }],
+  pavilions: [{ x: 1300, y: 2200 }, { x: 900, y: 2700 }, { x: 3000, y: 900 }, { x: 3700, y: 2900 }],
+  iceShops: [{ x: 1800, y: 1900 }, { x: 3500, y: 2000 }],
+  chiliFields: [{ x: 1100, y: 1000 }],
+  processionPath: [{ x: 300, y: 1600 }, { x: 4500, y: 1600 }],
 }
 
 export const inRect = (p: Point, r: Rect, pad = 0): boolean =>
@@ -75,7 +75,7 @@ export const inRect = (p: Point, r: Rect, pad = 0): boolean =>
 
 export function zoneAt(map: GameMap, p: Point): Zone {
   return map.zones.find((z) => p.x >= z.rect.x && p.x < z.rect.x + z.rect.w && p.y >= z.rect.y && p.y < z.rect.y + z.rect.h)
-    ?? map.zones.find((z) => z.id === 'park')
+    ?? map.zones.find((z) => z.id === 'village')
     ?? map.zones[0]
 }
 

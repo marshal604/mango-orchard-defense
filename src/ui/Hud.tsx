@@ -10,12 +10,12 @@ export const formatTime = (sec: number) => {
 const snapshot = (game: Game) => {
   const r = game.run
   const zone = game.map.zones.find((z) => z.id === game.zone)
-  const king = game.geese.find((g) => g.size === 'king')
+  const king = game.monkeys.find((g) => g.size === 'king')
   return {
     time: formatTime(game.elapsed),
     money: r.money,
-    cork: r.cork,
-    feather: r.feather,
+    mango: r.mango,
+    banana: r.banana,
     bagUsed: r.bagUsed,
     bagCap: r.bagCap,
     hp: Math.ceil(r.hp),
@@ -41,8 +41,8 @@ export function Hud({ game, onPause }: { game: Game; onPause: () => void }) {
       </div>
       <div className="hud-row hud-res">
         <span data-testid="money"><img src="assets/icon_coin.png" alt="錢" />{s.money}</span>
-        <span data-testid="cork"><img src="assets/icon_cork.png" alt="軟木" />{s.cork}</span>
-        <span data-testid="feather"><img src="assets/icon_feather.png" alt="鵝毛" />{s.feather}</span>
+        <span data-testid="mango"><img src="assets/icon_mango.png" alt="芒果" />{s.mango}</span>
+        <span data-testid="banana"><img src="assets/icon_banana.png" alt="香蕉" />{s.banana}</span>
         <span><img src="assets/icon_heart.png" alt="血量" />{s.hp}/{s.hpMax}</span>
       </div>
       <div className="hud-bar-row">
@@ -53,7 +53,7 @@ export function Hud({ game, onPause }: { game: Game; onPause: () => void }) {
         危險度 {s.stars}
         {s.king && (
           <>
-            {'　'}鵝王 {s.king}
+            {'　'}猴王 {s.king}
             <div className="hud-bar"><div style={{ width: `${s.kingRatio * 100}%`, background: '#d84c4c' }} /></div>
           </>
         )}

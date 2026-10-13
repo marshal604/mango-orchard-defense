@@ -1,6 +1,6 @@
-import { DIFFICULTY, GOOSE, KING, NEST, TREE } from './config'
+import { DIFFICULTY, MONKEY, KING, DEN, TREE } from './config'
 import type { Difficulty } from './config'
-import type { Goose, GooseSize, Nest, Tree } from './entities'
+import type { Monkey, MonkeySize, Den, Tree } from './entities'
 import type { GameMap, Point, Zone } from './map'
 import { dist, zoneAt } from './map'
 
@@ -15,18 +15,18 @@ export function makeTree(map: GameMap, p: Point, big: boolean): Tree {
   }
 }
 
-export function makeGoose(map: GameMap, p: Point, size: GooseSize, difficulty: Difficulty, nest: Nest | null = null): Goose {
-  const hp = size === 'king' ? DIFFICULTY[difficulty].king.hp : GOOSE[size].hp
+export function makeMonkey(map: GameMap, p: Point, size: MonkeySize, difficulty: Difficulty, den: Den | null = null): Monkey {
+  const hp = size === 'king' ? DIFFICULTY[difficulty].king.hp : MONKEY[size].hp
   return {
-    kind: 'goose', id: newId(), x: p.x, y: p.y, size, hp, hpMax: hp, alive: true,
+    kind: 'monkey', id: newId(), x: p.x, y: p.y, size, hp, hpMax: hp, alive: true,
     zone: zoneAt(map, p), home: { ...p }, state: 'wander', target: null, wanderTo: null,
-    pauseLeft: 0, biteCd: 0, moltLeft: 0, nest, lockedBy: null, facingRight: false, biting: false,
+    pauseLeft: 0, biteCd: 0, spicyLeft: 0, den, lockedBy: null, facingRight: false, biting: false,
   }
 }
 
-export function makeNest(map: GameMap, p: Point): Nest {
+export function makeDen(map: GameMap, p: Point): Den {
   return {
-    kind: 'nest', id: newId(), x: p.x, y: p.y, hp: NEST.hp, alive: true,
+    kind: 'den', id: newId(), x: p.x, y: p.y, hp: DEN.hp, alive: true,
     zone: zoneAt(map, p), children: 0, spawnCd: 0, respawnLeft: 0,
   }
 }
@@ -65,48 +65,48 @@ function place(pl: Placer, zone: Zone, spacing: number): Point | null {
 export function populate(map: GameMap, rng: () => number, difficulty: Difficulty) {
   const pl: Placer = { rng, map, taken: [] }
   const trees: Tree[] = []
-  const geese: Goose[] = []
-  const nests: Nest[] = []
+  const monkeys: Monkey[] = []
+  const dens: Den[] = []
   for (const zone of map.zones) {
     const c = zone.counts
     const repeat = (n: number, fn: () => void) => { for (let i = 0; i < n; i++) fn() }
     repeat(c.bigTree, () => { const p = place(pl, zone, MIN_SPACING.big); if (p) trees.push(makeTree(map, p, true)) })
     repeat(c.smallTree, () => { const p = place(pl, zone, MIN_SPACING.small); if (p) trees.push(makeTree(map, p, false)) })
-    repeat(c.nest, () => { const p = place(pl, zone, MIN_SPACING.big); if (p) nests.push(makeNest(map, p)) })
-    repeat(c.goose, () => geese.push(makeGoose(map, randomPoint(pl, zone), 'small', difficulty)))
-    repeat(c.bigGoose, () => geese.push(makeGoose(map, randomPoint(pl, zone), 'big', difficulty)))
+    repeat(c.den, () => { const p = place(pl, zone, MIN_SPACING.big); if (p) dens.push(makeDen(map, p)) })
+    repeat(c.monkey, () => monkeys.push(makeMonkey(map, randomPoint(pl, zone), 'small', difficulty)))
+    repeat(c.bigMonkey, () => monkeys.push(makeMonkey(map, randomPoint(pl, zone), 'big', difficulty)))
   }
-  const wetland = map.zones.find((z) => z.id === 'wetland')
-  const hasGeese = map.zones.some((z) => z.counts.goose + z.counts.bigGoose > 0)
-  if (wetland && hasGeese) {
-    for (let i = 0; i < DIFFICULTY[difficulty].extraBigGeese; i++) {
-      geese.push(makeGoose(map, randomPoint(pl, wetland), 'big', difficulty))
+  const deep = map.zones.find((z) => z.id === 'deep')
+  const hasGeese = map.zones.some((z) => z.counts.monkey + z.counts.bigMonkey > 0)
+  if (deep && hasGeese) {
+    for (let i = 0; i < DIFFICULTY[difficulty].extraBigMonkeys; i++) {
+      monkeys.push(makeMonkey(map, randomPoint(pl, deep), 'big', difficulty))
     }
   }
-  return { trees, geese, nests }
+  return { trees, monkeys, dens }
 }
 
 export const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
-// Regrows destroyed nests and returns spawn points for new geese (the caller links them to the nest).
-export function tickNests(nests: readonly Nest[], dt: number, every: number, rng: () => number, map: GameMap) {
-  const spawns: { nest: Nest; at: Point }[] = []
-  for (const n of nests) {
+// Regrows destroyed dens and returns spawn points for new monkeys (the caller links them to the den).
+export function tickDens(dens: readonly Den[], dt: number, every: number, rng: () => number, map: GameMap) {
+  const spawns: { den: Den; at: Point }[] = []
+  for (const n of dens) {
     if (!n.alive) {
       n.respawnLeft -= dt
-      if (n.respawnLeft <= 0) Object.assign(n, { alive: true, hp: NEST.hp, spawnCd: 0 })
+      if (n.respawnLeft <= 0) Object.assign(n, { alive: true, hp: DEN.hp, spawnCd: 0 })
       continue
     }
     n.spawnCd += dt
     if (n.spawnCd < every) continue
     n.spawnCd = 0
-    if (n.children >= NEST.maxAlive) continue
+    if (n.children >= DEN.maxAlive) continue
     const angle = rng() * Math.PI * 2
     spawns.push({
-      nest: n,
+      den: n,
       at: {
-        x: clamp(n.x + Math.cos(angle) * NEST.spawnRadius, 10, map.width - 10),
-        y: clamp(n.y + Math.sin(angle) * NEST.spawnRadius, 30, map.height - 10),
+        x: clamp(n.x + Math.cos(angle) * DEN.spawnRadius, 10, map.width - 10),
+        y: clamp(n.y + Math.sin(angle) * DEN.spawnRadius, 30, map.height - 10),
       },
     })
   }

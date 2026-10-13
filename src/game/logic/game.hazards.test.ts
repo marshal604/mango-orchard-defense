@@ -11,22 +11,22 @@ const withMap = (patch: Partial<GameMap>) => new Game({ difficulty: 'normal', se
 
 const SPOT = { x: 1000, y: 600 }
 
-describe('shade tents', () => {
-  it('make geese give up, regenerate 10 hp/s and take all cash until $2000 is donated', () => {
-    const game = withMap({ shades: [SPOT] })
-    game.setRacket(-1)
+describe('temple pavilions', () => {
+  it('make monkeys give up, regenerate 10 hp/s and take all cash until $2000 is donated', () => {
+    const game = withMap({ pavilions: [SPOT] })
+    game.setTool(-1)
     game.run.money = 300
     game.run.hp = 50
-    const goose = game.spawnGoose({ x: SPOT.x + 120, y: SPOT.y }, 'small')
+    const monkey = game.spawnMonkey({ x: SPOT.x + 120, y: SPOT.y }, 'small')
     game.teleport(SPOT)
     run(game, 1)
-    expect(goose.state).not.toBe('chase')
+    expect(monkey.state).not.toBe('chase')
     expect(game.run.money).toBe(0)
     expect(game.run.hp).toBeGreaterThanOrEqual(59)
   })
 
   it('are free after $2000 has been donated', () => {
-    const game = withMap({ shades: [SPOT] })
+    const game = withMap({ pavilions: [SPOT] })
     game.run.money = 2500
     game.teleport(SPOT)
     game.step(0.05, idle)
@@ -39,12 +39,12 @@ describe('shade tents', () => {
   })
 })
 
-describe('locker rooms', () => {
+describe('ice rooms', () => {
   it('lock the player for 5 s, then rush mode: faster but draining 2 hp/s for 10 s', () => {
-    const game = withMap({ lockers: [SPOT] })
+    const game = withMap({ iceShops: [SPOT] })
     game.teleport(SPOT)
     game.step(0.05, idle)
-    expect(game.trapped?.kind).toBe('locker')
+    expect(game.trapped?.kind).toBe('ice')
     const x = game.player.x
     run(game, 4.8, { move: { x: 1, y: 0 } })
     expect(game.player.x).toBe(x)
@@ -58,34 +58,34 @@ describe('locker rooms', () => {
   })
 
   it('cannot be hurt while locked inside', () => {
-    const game = withMap({ lockers: [SPOT] })
+    const game = withMap({ iceShops: [SPOT] })
     game.teleport(SPOT)
     game.step(0.05, idle)
-    game.spawnGoose({ x: SPOT.x + 10, y: SPOT.y }, 'big')
+    game.spawnMonkey({ x: SPOT.x + 10, y: SPOT.y }, 'big')
     run(game, 2)
     expect(game.run.hp).toBe(170)
   })
 })
 
-describe('sports drink stands', () => {
-  it('hold the player 5 s then make geese they hit keep molting', () => {
-    const game = withMap({ drinks: [SPOT] })
+describe('sports chili stands', () => {
+  it('hold the player 5 s then make monkeys they hit keep molting', () => {
+    const game = withMap({ chiliFields: [SPOT] })
     game.teleport(SPOT)
     game.step(0.05, idle)
-    expect(game.trapped?.kind).toBe('drink')
+    expect(game.trapped?.kind).toBe('chili')
     run(game, 5.1)
     expect(game.trapped).toBeNull()
-    expect(game.status.hypeLeft).toBeGreaterThan(20)
-    const goose = game.spawnGoose({ x: game.player.x + 30, y: game.player.y }, 'big')
+    expect(game.status.chiliLeft).toBeGreaterThan(20)
+    const monkey = game.spawnMonkey({ x: game.player.x + 30, y: game.player.y }, 'big')
     run(game, 0.5)
-    expect(goose.moltLeft).toBeGreaterThan(0)
+    expect(monkey.spicyLeft).toBeGreaterThan(0)
   })
 })
 
-describe('the marathon', () => {
+describe('the procession', () => {
   it('pushes the player out of the runners instead of letting them walk through', () => {
-    const game = withMap({ marathonPath: [{ x: 300, y: 1600 }, { x: 4500, y: 1600 }] })
-    const runners = game.marathon!
+    const game = withMap({ processionPath: [{ x: 300, y: 1600 }, { x: 4500, y: 1600 }] })
+    const runners = game.procession!
     game.teleport({ x: runners.head.x - 100, y: 1600 })
     game.step(0.05, idle)
     expect(Math.abs(game.player.y - 1600)).toBeGreaterThanOrEqual(30)

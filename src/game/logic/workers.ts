@@ -1,6 +1,6 @@
 import { MILESTONES, WORKER } from './config'
-import type { Goose, Pile, Tree, Worker } from './entities'
-import { gooseStats } from './geese'
+import type { Monkey, Pile, Tree, Worker } from './entities'
+import { monkeyStats } from './monkeys'
 import type { Point } from './map'
 import type { Levels, Perks } from './run'
 import { sellPrice } from './run'
@@ -9,28 +9,28 @@ import { sellPrice } from './run'
 export interface WorkerWorld {
   rng: () => number
   trees: readonly Tree[]
-  geese: readonly Goose[]
+  monkeys: readonly Monkey[]
   piles: readonly Pile[]
   levels: Levels
   perks: Perks
-  clubPad: Point
+  coopPad: Point
   stallPad: Point
   takePile: (pile: Pile, w: Worker) => void
   sellWorkerBag: (w: Worker) => void
-  hit: (target: Tree | Goose, damage: number, by: Worker) => void
+  hit: (target: Tree | Monkey, damage: number, by: Worker) => void
 }
 
 export const workerBagCap = (levels: Levels) => WORKER.bags[levels.cart]
-export const workerBagFree = (w: Worker, levels: Levels) => Math.max(0, workerBagCap(levels) - w.cork - w.feather)
+export const workerBagFree = (w: Worker, levels: Levels) => Math.max(0, workerBagCap(levels) - w.mango - w.banana)
 
 export const workerInterval = (levels: Levels, perks: Perks) =>
   (WORKER.interval / (1 + levels.workerTool * WORKER.toolSpeedPerLevel)) *
-  (perks.complaints ? MILESTONES.complaintsWorkerSlow : 1)
+  (perks.overwork ? MILESTONES.overworkWorkerSlow : 1)
 
 export function makeWorker(kind: Worker['kind'], at: Point): Worker {
   return {
     kind, x: at.x, y: at.y, hp: WORKER.hp, state: 'idle', target: null,
-    cork: 0, feather: 0, cd: 0, downLeft: 0, idleTo: null,
+    mango: 0, banana: 0, cd: 0, downLeft: 0, idleTo: null,
   }
 }
 
@@ -54,15 +54,15 @@ function release(w: Worker) {
   w.target = null
 }
 
-function findTarget(world: WorkerWorld, w: Worker): Tree | Goose | null {
-  const pool: readonly (Tree | Goose)[] = w.kind === 'ballboy'
+function findTarget(world: WorkerWorld, w: Worker): Tree | Monkey | null {
+  const pool: readonly (Tree | Monkey)[] = w.kind === 'picker'
     ? world.trees.filter((t) => !t.big)
-    : world.geese.filter((g) => g.size !== 'king')
-  let best: Tree | Goose | null = null
+    : world.monkeys.filter((g) => g.size !== 'king')
+  let best: Tree | Monkey | null = null
   let bestD = Infinity
   for (const t of pool) {
     if (!t.alive || t.lockedBy) continue
-    const d = Math.hypot(t.x - world.clubPad.x, t.y - world.clubPad.y)
+    const d = Math.hypot(t.x - world.coopPad.x, t.y - world.coopPad.y)
     if (d < bestD) { bestD = d; best = t }
   }
   return best
@@ -71,7 +71,7 @@ function findTarget(world: WorkerWorld, w: Worker): Tree | Goose | null {
 function loiter(world: WorkerWorld, w: Worker, dt: number) {
   if (!w.idleTo) {
     const s = WORKER.idleSpread
-    w.idleTo = { x: world.clubPad.x + (world.rng() * 2 - 1) * s, y: world.clubPad.y + 10 + world.rng() * (s - 10) }
+    w.idleTo = { x: world.coopPad.x + (world.rng() * 2 - 1) * s, y: world.coopPad.y + 10 + world.rng() * (s - 10) }
   }
   moveTo(w, w.idleTo, dt)
 }
@@ -79,7 +79,7 @@ function loiter(world: WorkerWorld, w: Worker, dt: number) {
 function work(world: WorkerWorld, w: Worker, dt: number) {
   const t = w.target
   if (!t) return
-  const reach = WORKER.range + (t.kind === 'tree' ? t.hitRadius : gooseStats(t).hitRadius)
+  const reach = WORKER.range + (t.kind === 'tree' ? t.hitRadius : monkeyStats(t).hitRadius)
   if (Math.hypot(t.x - w.x, t.y - w.y) > reach) {
     moveTo(w, t, dt)
     return
@@ -94,7 +94,7 @@ export function updateWorker(world: WorkerWorld, w: Worker, dt: number) {
   if (w.state === 'down') {
     w.downLeft -= dt
     if (w.downLeft > 0) return
-    Object.assign(w, { x: world.clubPad.x, y: world.clubPad.y, hp: WORKER.hp, state: 'idle' })
+    Object.assign(w, { x: world.coopPad.x, y: world.coopPad.y, hp: WORKER.hp, state: 'idle' })
     return
   }
   for (const pile of world.piles) {
@@ -120,7 +120,7 @@ export function updateWorker(world: WorkerWorld, w: Worker, dt: number) {
       w.target = next
       w.state = 'work'
       w.idleTo = null
-    } else if (w.cork + w.feather > 0) {
+    } else if (w.mango + w.banana > 0) {
       w.state = 'return'
       return
     } else {
@@ -139,9 +139,9 @@ export function knockDown(w: Worker) {
 
 // Empties the worker's bag; returns its sale value at current prices.
 export function cashOut(w: Worker, levels: Levels): number {
-  const total = w.cork * sellPrice('cork', levels) + w.feather * sellPrice('feather', levels)
-  w.cork = 0
-  w.feather = 0
+  const total = w.mango * sellPrice('mango', levels) + w.banana * sellPrice('banana', levels)
+  w.mango = 0
+  w.banana = 0
   return total
 }
 

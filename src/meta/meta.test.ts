@@ -37,14 +37,14 @@ describe('quest guide', () => {
 
   it('sends the player to sell when the bag is nearly full', () => {
     const game = newGame()
-    game.run.cork = 26
+    game.run.mango = 26
     expect(nextGoal(game)).toMatchObject({ kind: 'sell', target: { x: 2400 } })
   })
 
   it('points to the next suggested upgrade when it is affordable', () => {
     const game = newGame()
     game.run.money = 150
-    expect(nextGoal(game)).toMatchObject({ kind: 'buy', track: 'racket' })
+    expect(nextGoal(game)).toMatchObject({ kind: 'buy', track: 'tool' })
   })
 
   it('suggests gathering when nothing is affordable', () => {
@@ -52,9 +52,9 @@ describe('quest guide', () => {
     expect(nextGoal(game).kind).toBe('gather')
   })
 
-  it('sends a geared-up player after the Goose King', () => {
+  it('sends a geared-up player after the Monkey King', () => {
     const game = newGame()
-    game.run.levels = { ...game.run.levels, racket: 3, armor: 2 }
+    game.run.levels = { ...game.run.levels, tool: 3, armor: 2 }
     expect(nextGoal(game)).toMatchObject({ kind: 'king', target: { x: game.king.x, y: game.king.y } })
   })
 })

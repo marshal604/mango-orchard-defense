@@ -14,13 +14,13 @@ const run = (game: Game, seconds: number, input = idle) => {
 const LAKE = { x: 1000, y: 600 }
 
 describe('gathering', () => {
-  it('fells a small cork tree in range and puts cork x zone drop in the bag', () => {
+  it('fells a small mango tree in range and puts mango x zone drop in the bag', () => {
     const game = newGame()
     game.teleport(LAKE)
     const tree = game.spawnTree({ x: LAKE.x + 30, y: LAKE.y }, false)
     run(game, 3)
     expect(tree.alive).toBe(false)
-    expect(game.run.cork).toBe(2)
+    expect(game.run.mango).toBe(2)
   })
 
   it('ignores targets outside attack range', () => {
@@ -31,7 +31,7 @@ describe('gathering', () => {
     expect(tree.alive).toBe(true)
   })
 
-  it('cannot damage an old cork oak with a wooden racket and hints to upgrade', () => {
+  it('cannot damage an old mango oak with a wooden tool and hints to upgrade', () => {
     const game = newGame()
     game.teleport(LAKE)
     const oak = game.spawnTree({ x: LAKE.x + 30, y: LAKE.y }, true)
@@ -41,47 +41,47 @@ describe('gathering', () => {
     expect(game.drainEvents().some((e) => e.type === 'toast')).toBe(true)
   })
 
-  it('attacks a goose chasing the player before a tree', () => {
+  it('attacks a monkey chasing the player before a tree', () => {
     const game = newGame()
     game.teleport(LAKE)
     const tree = game.spawnTree({ x: LAKE.x - 20, y: LAKE.y }, false)
-    const goose = game.spawnGoose({ x: LAKE.x + 40, y: LAKE.y }, 'small')
+    const monkey = game.spawnMonkey({ x: LAKE.x + 40, y: LAKE.y }, 'small')
     game.step(0.05, idle)
-    expect(goose.hp).toBeLessThan(4)
+    expect(monkey.hp).toBeLessThan(4)
     expect(tree.hp).toBe(3)
   })
 
-  it('gives feathers x zone drop when a goose is defeated', () => {
+  it('gives feathers x zone drop when a monkey is defeated', () => {
     const game = newGame()
     game.teleport(LAKE)
-    game.spawnGoose({ x: LAKE.x + 20, y: LAKE.y }, 'small')
+    game.spawnMonkey({ x: LAKE.x + 20, y: LAKE.y }, 'small')
     run(game, 4)
-    expect(game.run.feather).toBe(2)
-    expect(game.run.stats.geese).toBe(1)
+    expect(game.run.banana).toBe(2)
+    expect(game.run.stats.monkeys).toBe(1)
   })
 
   it('drops a pile when the bag is full and picks it up after selling space frees up', () => {
     const game = newGame()
     game.teleport(LAKE)
-    game.run.cork = 30
+    game.run.mango = 30
     game.spawnTree({ x: LAKE.x + 30, y: LAKE.y }, false)
     run(game, 3)
     expect(game.piles).toHaveLength(1)
-    expect(game.piles[0].cork).toBe(2)
-    game.run.cork = 0
+    expect(game.piles[0].mango).toBe(2)
+    game.run.mango = 0
     game.teleport({ x: game.piles[0].x, y: game.piles[0].y })
     game.step(0.05, idle)
     expect(game.piles).toHaveLength(0)
-    expect(game.run.cork).toBe(2)
+    expect(game.run.mango).toBe(2)
   })
 })
 
-describe('geese', () => {
+describe('monkeys', () => {
   it('chase the player within sight and bite for base bite x zone damage', () => {
     const game = newGame()
     game.teleport(LAKE)
-    game.spawnGoose({ x: LAKE.x + 150, y: LAKE.y }, 'small')
-    game.setRacket(-1) // no attacking, isolate the goose
+    game.spawnMonkey({ x: LAKE.x + 150, y: LAKE.y }, 'small')
+    game.setTool(-1) // no attacking, isolate the monkey
     run(game, 2)
     expect(game.run.hp).toBeLessThan(170)
     const bites = (170 - game.run.hp) / ((4 / 3) * 2)
@@ -92,8 +92,8 @@ describe('geese', () => {
     const game = newGame()
     const stall = game.map.buildings.find((b) => b.id === 'stall')!
     game.teleport({ x: stall.x, y: stall.y + 100 })
-    game.setRacket(-1)
-    game.spawnGoose({ x: stall.x + 20, y: stall.y + 100 }, 'big')
+    game.setTool(-1)
+    game.spawnMonkey({ x: stall.x + 20, y: stall.y + 100 }, 'big')
     run(game, 3)
     expect(game.run.hp).toBe(170)
   })
@@ -101,21 +101,21 @@ describe('geese', () => {
   it('give up the chase when the player runs past the leash', () => {
     const game = newGame()
     game.teleport(LAKE)
-    game.setRacket(-1)
-    const goose = game.spawnGoose({ x: LAKE.x + 100, y: LAKE.y }, 'small')
+    game.setTool(-1)
+    const monkey = game.spawnMonkey({ x: LAKE.x + 100, y: LAKE.y }, 'small')
     game.step(0.05, idle)
-    expect(goose.state).toBe('chase')
+    expect(monkey.state).toBe('chase')
     run(game, 2.5, { move: { x: 1, y: 0 } })
-    expect(goose.state).not.toBe('chase')
+    expect(monkey.state).not.toBe('chase')
   })
 
-  it('big geese scrape the player so they keep bleeding', () => {
+  it('big monkeys scratch the player so they keep bleeding', () => {
     const game = newGame()
     game.teleport(LAKE)
-    game.setRacket(-1)
-    game.spawnGoose({ x: LAKE.x + 10, y: LAKE.y }, 'big')
+    game.setTool(-1)
+    game.spawnMonkey({ x: LAKE.x + 10, y: LAKE.y }, 'big')
     game.step(0.05, idle)
-    expect(game.status.scrapeLeft).toBeGreaterThan(0)
+    expect(game.status.scratchLeft).toBeGreaterThan(0)
   })
 })
 
@@ -142,8 +142,8 @@ describe('health', () => {
     const game = newGame()
     game.teleport(LAKE)
     game.run.hp = 1
-    game.setRacket(-1)
-    game.spawnGoose({ x: LAKE.x + 10, y: LAKE.y }, 'small')
+    game.setTool(-1)
+    game.spawnMonkey({ x: LAKE.x + 10, y: LAKE.y }, 'small')
     run(game, 1)
     expect(game.run.dead).toBe(true)
     game.revive('keep')
@@ -157,13 +157,13 @@ describe('health', () => {
     game.teleport(LAKE)
     game.run.hp = 1
     game.run.money = 500
-    game.run.cork = 10
-    game.setRacket(-1)
-    game.spawnGoose({ x: LAKE.x + 10, y: LAKE.y }, 'small')
+    game.run.mango = 10
+    game.setTool(-1)
+    game.spawnMonkey({ x: LAKE.x + 10, y: LAKE.y }, 'small')
     run(game, 1)
     game.revive('restart')
     expect(game.player).toMatchObject({ x: 2510, y: 2400 })
     expect(game.run.money).toBe(0)
-    expect(game.run.cork).toBe(0)
+    expect(game.run.mango).toBe(0)
   })
 })

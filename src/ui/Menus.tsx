@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { Difficulty } from '../game/logic/config'
-import { DIFFICULTY, KING, NEST, SHADE, TRAPS } from '../game/logic/config'
+import { DIFFICULTY, KING, DEN, PAVILION, TRAPS } from '../game/logic/config'
 import { topRecords } from '../meta/leaderboard'
 import { formatMs } from './Result'
 
@@ -25,8 +25,8 @@ function Screen({ children }: { children: ReactNode }) {
 export function Title({ onStart, onBoard, onHowTo }: { onStart: () => void; onBoard: () => void; onHowTo: () => void }) {
   return (
     <Screen>
-      <h1 className="logo">羽球工坊<br />大亨</h1>
-      <p className="tagline">採軟木、趕野鵝、做羽球，打倒鵝王！</p>
+      <h1 className="logo">芒果園<br />保衛戰</h1>
+      <p className="tagline">採芒果、趕獼猴、擺攤賺錢，打倒猴王！</p>
       <nav className="menu">
         <button type="button" className="btn btn-gold" onClick={onStart}>開始遊戲</button>
         <button type="button" className="btn" onClick={onBoard}>排行榜</button>
@@ -62,7 +62,7 @@ export function Setup({ initial, onGo, onBack }: SetupProps) {
             </button>
           ))}
         </div>
-        <small>{difficulty === 'hell' ? '血少、鵝兇、東西貴、工人會被打倒' : '第一次玩選這個'}</small>
+        <small>{difficulty === 'hell' ? '血少、猴兇、東西貴、工人會被打倒' : '第一次玩選這個'}</small>
         <div className="row">
           <button type="button" className="btn" onClick={onBack}>返回</button>
           <button type="submit" className="btn btn-gold" disabled={!name}>出發</button>
@@ -73,10 +73,10 @@ export function Setup({ initial, onGo, onBack }: SetupProps) {
 }
 
 const STEPS = [
-  { img: 'cork_tree', title: '砍軟木樹、趕野鵝', text: '靠近就會自動揮拍，軟木和鵝毛自動進背包' },
-  { img: 'stall', title: '回收購攤賣掉', text: '背包快滿了就回中央運動公園的收購攤，站上前面的圓圈，排隊的客人會一個一個跟你買' },
-  { img: 'proshop', title: '買升級', text: '球友會館（請工人）、球拍專賣店（球拍、護具）、補給站（背包、收購價）分散在地圖上，站上圓圈打開選單。建物周圍是安全區。不知道去哪就看任務，金色箭頭會帶路' },
-  { img: 'goose_king', title: '打倒鵝王', text: '鵝王在地圖西南角的濕地，被牠啄到會破皮一直掉血、還會扭到腳跑不快。打倒牠就通關，越快越好' },
+  { img: 'fruit_tree', title: '採芒果、趕獼猴', text: '靠近果樹或猴子就會自動揮竹竿，芒果和搶回來的香蕉自動進背包' },
+  { img: 'stall', title: '回收購攤賣掉', text: '背包快滿了就回果園村的路邊水果攤，站上前面的圓圈，排隊的客人會一個一個跟你買' },
+  { img: 'toolshop', title: '買升級', text: '農會（請工人）、農具行（採果工具、護具）、柑仔店（背包、收購價）分散在地圖上，站上圓圈打開選單。建物周圍是安全區。不知道去哪就看任務，金色箭頭會帶路' },
+  { img: 'monkey_king', title: '打倒猴王', text: '猴王在地圖西南角的深山，被牠抓到會流血、還會被撞到扭到腳。打倒牠就通關，越快越好' },
 ]
 
 export function HowTo({ onBack }: { onBack: () => void }) {
@@ -94,9 +94,9 @@ export function HowTo({ onBack }: { onBack: () => void }) {
         </ol>
         <small>
           手機：按住畫面任何地方拖曳移動。電腦：WASD 或方向鍵。<br />
-          ★ 越多的區域掉落越多、鵝也越兇。大鵝會啄到你破皮，破皮時血會一直掉。站在遮陽棚下鵝不會追你（第一次要捐光現金，累積 ${SHADE.freeAfter} 後免費）；
-          別誤闖更衣室（換比賽服 {TRAPS.locker.lockSec} 秒，出來進入拚戰模式：變快但體力一直流失）；喝了運動飲料攤的飲料會熱血沸騰，打到的鵝會一直掉毛。
-          拆掉鵝窩有 ${NEST.reward}，而且手感發燙：攻擊速度 ×{NEST.haste.mult} {NEST.haste.sec} 秒。鵝王血量 {DIFFICULTY.normal.king.hp}（地獄 {DIFFICULTY.hell.king.hp}），會在離家 {KING.leashRadius} 外放棄追你並回血。
+          ★ 越多的區域掉落越多、猴子也越兇。大公猴會抓傷你，抓傷時血會一直掉。躲進廟口涼亭猴子不敢靠近（要投香油錢＝身上現金，累積 ${PAVILION.freeAfter} 後免費）；
+          小心剉冰店（被拉去吃冰 {TRAPS.ice.lockSec} 秒，之後肚子痛：跑超快但一直掉血）；誤闖朝天椒田會被辣到咳，但之後打到的猴子會辣到一直掉血。
+          拆掉猴群據點有 ${DEN.reward}，而且手腳俐落：攻擊速度 ×{DEN.haste.mult} {DEN.haste.sec} 秒。猴王血量 {DIFFICULTY.normal.king.hp}（地獄 {DIFFICULTY.hell.king.hp}），會在離家 {KING.leashRadius} 外放棄追你並回血。
         </small>
         <button type="button" className="btn" onClick={onBack}>返回</button>
       </div>

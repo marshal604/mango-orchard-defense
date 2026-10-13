@@ -1,6 +1,6 @@
-# Shuttle Tycoon
+# 芒果園保衛戰 (shuttle-tycoon)
 
-Badminton-themed remake of a top-down gather/sell/upgrade/boss game. Mechanics reference:
+Orchard-vs-macaques remake (芒果園保衛戰) of a top-down gather/sell/upgrade/boss game. Mechanics reference:
 `docs/reverse-engineering.md`. Domain language: `CONTEXT.md`.
 
 Stack: Vite + React (menus/HUD) + Phaser (world) + TypeScript. Vitest for logic, Playwright for e2e.

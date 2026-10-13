@@ -15,15 +15,15 @@ export const workerStash = (w: Worker, levels: Levels): Stash => (kind, amount) 
 }
 
 export function newPile(kind: Resource, amount: number, at: Point): Pile {
-  const pile: Pile = { id: newId(), x: at.x, y: at.y, cork: 0, feather: 0 }
+  const pile: Pile = { id: newId(), x: at.x, y: at.y, mango: 0, banana: 0 }
   pile[kind] = amount
   return pile
 }
 
-// Feathers first, like selling, so the more valuable item is never left behind.
+// Bananas first, like selling, so the more valuable item is never left behind.
 export function takeFromPile(pile: Pile, stash: Stash): void {
-  pile.feather = stash('feather', pile.feather)
-  pile.cork = stash('cork', pile.cork)
+  pile.banana = stash('banana', pile.banana)
+  pile.mango = stash('mango', pile.mango)
 }
 
-export const nonEmpty = (piles: readonly Pile[]) => piles.filter((p) => p.cork + p.feather > 0)
+export const nonEmpty = (piles: readonly Pile[]) => piles.filter((p) => p.mango + p.banana > 0)

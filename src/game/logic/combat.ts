@@ -1,6 +1,6 @@
-import { NEST } from './config'
-import type { Goose, Nest, Target, Tree } from './entities'
-import { gooseStats } from './geese'
+import { DEN } from './config'
+import type { Monkey, Den, Target, Tree } from './entities'
+import { monkeyStats } from './monkeys'
 import type { Point } from './map'
 import { dist } from './map'
 
@@ -15,16 +15,16 @@ function nearest<T extends Target>(p: Point, list: readonly T[], ok: (t: T) => b
   return best
 }
 
-interface Field { geese: readonly Goose[]; nests: readonly Nest[]; trees: readonly Tree[] }
+interface Field { monkeys: readonly Monkey[]; dens: readonly Den[]; trees: readonly Tree[] }
 
-// Priority: geese chasing the player > any goose > nest > tree the racket can cut.
-// `blockedOak` is an old oak in range that the current racket cannot cut (for the upgrade hint).
+// Priority: monkeys chasing the player > any monkey > den > tree the tool can cut.
+// `blockedOak` is an old oak in range that the current tool cannot cut (for the upgrade hint).
 export function pickTarget(p: Point, range: number, canBigTree: boolean, field: Field) {
   const inRange = (t: Point, r: number) => dist(p, t) <= range + r
-  const gooseIn = (g: Goose) => inRange(g, gooseStats(g).hitRadius)
-  const target: Target | null = nearest(p, field.geese, (g) => g.target === 'player' && gooseIn(g))
-    ?? nearest(p, field.geese, gooseIn)
-    ?? nearest(p, field.nests, (n) => inRange(n, NEST.hitRadius))
+  const monkeyIn = (g: Monkey) => inRange(g, monkeyStats(g).hitRadius)
+  const target: Target | null = nearest(p, field.monkeys, (g) => g.target === 'player' && monkeyIn(g))
+    ?? nearest(p, field.monkeys, monkeyIn)
+    ?? nearest(p, field.dens, (n) => inRange(n, DEN.hitRadius))
     ?? nearest(p, field.trees, (t) => (canBigTree || !t.big) && inRange(t, t.hitRadius))
   const blockedOak = target || canBigTree ? null : nearest(p, field.trees, (t) => t.big && inRange(t, t.hitRadius))
   return { target, blockedOak }
