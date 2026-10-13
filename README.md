@@ -10,7 +10,7 @@ mountains. Your clear time is your score.
 
 Full-quality video:
 
-https://github.com/user-attachments/assets/47b8540a-3551-456f-8d9d-c7f92a52bd5c
+▶ [Watch the full-quality video (docs/media/gameplay.mp4)](docs/media/gameplay.mp4)
 
 ## Play
 

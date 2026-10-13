@@ -9,7 +9,7 @@
 
 完整畫質影片：
 
-https://github.com/user-attachments/assets/47b8540a-3551-456f-8d9d-c7f92a52bd5c
+▶ [觀看完整畫質影片（docs/media/gameplay.mp4）](docs/media/gameplay.mp4)
 
 ## 開始玩
 
